@@ -80,14 +80,18 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	// Brand admin
 	admin := v1.Group("/admin", auth.RequireAuth(issuer), auth.RequireLevel(tenant.LevelStoreManager))
 	admin.GET("/brand", brandH.CurrentBrand)
+	admin.PUT("/brand", auth.RequireLevel(tenant.LevelBrandOwner), brandH.UpdateBrand)
+	admin.GET("/stats", brandH.Stats)
 	admin.GET("/stores", brandH.ListStores)
 	admin.POST("/stores", auth.RequireLevel(tenant.LevelBrandOwner), brandH.CreateStore)
 	admin.GET("/users", auth.RequireLevel(tenant.LevelBrandOwner), brandH.ListUsers)
 	admin.POST("/users", brandH.CreateUser)
 	admin.GET("/menu/categories", menuH.ListCategories)
 	admin.POST("/menu/categories", auth.RequireLevel(tenant.LevelBrandOwner), menuH.CreateCategory)
+	admin.PATCH("/menu/categories/:id", auth.RequireLevel(tenant.LevelBrandOwner), menuH.UpdateCategory)
 	admin.GET("/menu/items", menuH.ListItems)
 	admin.POST("/menu/items", auth.RequireLevel(tenant.LevelBrandOwner), menuH.CreateItem)
+	admin.PUT("/menu/items/:id", auth.RequireLevel(tenant.LevelBrandOwner), menuH.UpdateItem)
 	admin.PATCH("/menu/items/:id/availability", menuH.SetAvailability)
 
 	// POS

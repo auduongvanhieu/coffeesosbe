@@ -176,3 +176,37 @@ func rawJSON(b []byte) json.RawMessage {
 	}
 	return json.RawMessage(b)
 }
+
+type UpdateCategoryInput struct {
+	Name      string `json:"name" binding:"required,max=64"`
+	SortOrder int32  `json:"sortOrder"`
+	IsActive  *bool  `json:"isActive" binding:"required"`
+}
+
+func (s *Service) UpdateCategory(ctx context.Context, brandID, id uuid.UUID, in UpdateCategoryInput) (db.MenuCategory, error) {
+	return s.q.UpdateCategory(ctx, db.UpdateCategoryParams{
+		ID: id, BrandID: brandID, Name: in.Name, SortOrder: in.SortOrder, IsActive: *in.IsActive,
+	})
+}
+
+// UpdateItem replaces every editable field of an item (PUT semantics).
+func (s *Service) UpdateItem(ctx context.Context, brandID, id uuid.UUID, in CreateItemInput) (ItemView, error) {
+	if in.Options == nil {
+		in.Options = []OptionGroup{}
+	}
+	if err := ValidateOptions(in.Options); err != nil {
+		return ItemView{}, &ValidationError{Msg: err.Error()}
+	}
+	opts, err := json.Marshal(in.Options)
+	if err != nil {
+		return ItemView{}, fmt.Errorf("encode options: %w", err)
+	}
+	row, err := s.q.UpdateItem(ctx, db.UpdateItemParams{
+		ID: id, BrandID: brandID, CategoryID: in.CategoryID, Name: in.Name, Description: in.Description,
+		ImageUrl: in.ImageURL, BasePrice: in.BasePrice, Options: opts, SortOrder: in.SortOrder,
+	})
+	if err != nil {
+		return ItemView{}, err
+	}
+	return toItemView(row), nil
+}

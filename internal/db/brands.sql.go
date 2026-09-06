@@ -128,6 +128,36 @@ func (q *Queries) GetBrandBySlug(ctx context.Context, slug string) (Brand, error
 	return i, err
 }
 
+const getBrandStats = `-- name: GetBrandStats :one
+SELECT
+  (SELECT count(*) FROM stores s          WHERE s.brand_id = $1 AND s.is_active)::bigint    AS stores,
+  (SELECT count(*) FROM users u           WHERE u.brand_id = $1 AND u.is_active)::bigint    AS users,
+  (SELECT count(*) FROM menu_categories c WHERE c.brand_id = $1 AND c.is_active)::bigint    AS categories,
+  (SELECT count(*) FROM menu_items i      WHERE i.brand_id = $1)::bigint                    AS items,
+  (SELECT count(*) FROM menu_items i      WHERE i.brand_id = $1 AND i.is_available)::bigint AS available_items
+`
+
+type GetBrandStatsRow struct {
+	Stores         int64 `json:"stores"`
+	Users          int64 `json:"users"`
+	Categories     int64 `json:"categories"`
+	Items          int64 `json:"items"`
+	AvailableItems int64 `json:"availableItems"`
+}
+
+func (q *Queries) GetBrandStats(ctx context.Context, brandID uuid.UUID) (GetBrandStatsRow, error) {
+	row := q.db.QueryRow(ctx, getBrandStats, brandID)
+	var i GetBrandStatsRow
+	err := row.Scan(
+		&i.Stores,
+		&i.Users,
+		&i.Categories,
+		&i.Items,
+		&i.AvailableItems,
+	)
+	return i, err
+}
+
 const getStoreByID = `-- name: GetStoreByID :one
 SELECT id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at FROM stores WHERE id = $1
 `
@@ -217,4 +247,42 @@ func (q *Queries) ListStoresByBrand(ctx context.Context, brandID uuid.UUID) ([]S
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateBrand = `-- name: UpdateBrand :one
+UPDATE brands
+SET name = $2, slogan = $3, logo_url = $4, theme = $5, updated_at = now()
+WHERE id = $1
+RETURNING id, slug, name, slogan, logo_url, theme, is_active, created_at, updated_at
+`
+
+type UpdateBrandParams struct {
+	ID      uuid.UUID `json:"id"`
+	Name    string    `json:"name"`
+	Slogan  *string   `json:"slogan"`
+	LogoUrl *string   `json:"logoUrl"`
+	Theme   []byte    `json:"theme"`
+}
+
+func (q *Queries) UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand, error) {
+	row := q.db.QueryRow(ctx, updateBrand,
+		arg.ID,
+		arg.Name,
+		arg.Slogan,
+		arg.LogoUrl,
+		arg.Theme,
+	)
+	var i Brand
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Slogan,
+		&i.LogoUrl,
+		&i.Theme,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

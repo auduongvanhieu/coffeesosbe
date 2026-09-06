@@ -318,3 +318,89 @@ func (q *Queries) SetItemAvailability(ctx context.Context, arg SetItemAvailabili
 	)
 	return i, err
 }
+
+const updateCategory = `-- name: UpdateCategory :one
+UPDATE menu_categories
+SET name = $3, sort_order = $4, is_active = $5, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING id, brand_id, name, sort_order, is_active, created_at, updated_at
+`
+
+type UpdateCategoryParams struct {
+	ID        uuid.UUID `json:"id"`
+	BrandID   uuid.UUID `json:"brandId"`
+	Name      string    `json:"name"`
+	SortOrder int32     `json:"sortOrder"`
+	IsActive  bool      `json:"isActive"`
+}
+
+func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (MenuCategory, error) {
+	row := q.db.QueryRow(ctx, updateCategory,
+		arg.ID,
+		arg.BrandID,
+		arg.Name,
+		arg.SortOrder,
+		arg.IsActive,
+	)
+	var i MenuCategory
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.Name,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateItem = `-- name: UpdateItem :one
+UPDATE menu_items
+SET category_id = $3, name = $4, description = $5, image_url = $6,
+    base_price = $7, options = $8, sort_order = $9, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING id, brand_id, category_id, name, description, image_url, base_price, options, is_available, sort_order, created_at, updated_at
+`
+
+type UpdateItemParams struct {
+	ID          uuid.UUID `json:"id"`
+	BrandID     uuid.UUID `json:"brandId"`
+	CategoryID  uuid.UUID `json:"categoryId"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description"`
+	ImageUrl    *string   `json:"imageUrl"`
+	BasePrice   int64     `json:"basePrice"`
+	Options     []byte    `json:"options"`
+	SortOrder   int32     `json:"sortOrder"`
+}
+
+func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (MenuItem, error) {
+	row := q.db.QueryRow(ctx, updateItem,
+		arg.ID,
+		arg.BrandID,
+		arg.CategoryID,
+		arg.Name,
+		arg.Description,
+		arg.ImageUrl,
+		arg.BasePrice,
+		arg.Options,
+		arg.SortOrder,
+	)
+	var i MenuItem
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.BasePrice,
+		&i.Options,
+		&i.IsAvailable,
+		&i.SortOrder,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

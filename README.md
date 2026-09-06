@@ -74,14 +74,18 @@ brew install sqlc && make sqlc
 | POST   | /api/v1/platform/brands/:brandId/stores   | platform admin   |
 | POST   | /api/v1/platform/brands/:brandId/users    | platform admin   |
 | GET    | /api/v1/admin/brand                       | store manager +  |
+| PUT    | /api/v1/admin/brand                       | brand owner +    |
+| GET    | /api/v1/admin/stats                       | store manager +  |
 | GET    | /api/v1/admin/stores                      | store manager +  |
 | POST   | /api/v1/admin/stores                      | brand owner +    |
 | GET    | /api/v1/admin/users                       | brand owner +    |
 | POST   | /api/v1/admin/users                       | store manager +  |
 | GET    | /api/v1/admin/menu/categories             | store manager +  |
 | POST   | /api/v1/admin/menu/categories             | brand owner +    |
+| PATCH  | /api/v1/admin/menu/categories/:id         | brand owner +    |
 | GET    | /api/v1/admin/menu/items                  | store manager +  |
 | POST   | /api/v1/admin/menu/items                  | brand owner +    |
+| PUT    | /api/v1/admin/menu/items/:id              | brand owner +    |
 | PATCH  | /api/v1/admin/menu/items/:id/availability | store manager +  |
 | GET    | /api/v1/pos/menu                          | staff +          |
 | GET    | /api/v1/app/stores/:storeId/menu          | public           |

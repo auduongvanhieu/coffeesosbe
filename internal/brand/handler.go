@@ -33,10 +33,11 @@ func (h *Handler) ListBrands(c *gin.Context) {
 		httpx.FailDB(c, err)
 		return
 	}
-	if rows == nil {
-		rows = []db.Brand{}
+	out := make([]View, 0, len(rows))
+	for _, b := range rows {
+		out = append(out, toView(b))
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": out})
 }
 
 type createBrandInput struct {
@@ -68,7 +69,7 @@ func (h *Handler) CreateBrand(c *gin.Context) {
 		httpx.FailDB(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, row)
+	c.JSON(http.StatusCreated, toView(row))
 }
 
 // CreateStoreForBrand handles POST /platform/brands/:brandId/stores.
@@ -103,7 +104,7 @@ func (h *Handler) CurrentBrand(c *gin.Context) {
 		httpx.FailDB(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, row)
+	c.JSON(http.StatusOK, toView(row))
 }
 
 func (h *Handler) ListStores(c *gin.Context) {
@@ -234,5 +235,52 @@ func (h *Handler) createUser(c *gin.Context, brandID uuid.UUID) {
 	c.JSON(http.StatusCreated, auth.UserView{
 		ID: row.ID, BrandID: row.BrandID, StoreID: row.StoreID, Role: row.RoleCode,
 		Level: roleLevels[row.RoleCode], Email: row.Email, FullName: row.FullName,
+	})
+}
+
+type updateBrandInput struct {
+	Name    string         `json:"name" binding:"required,max=128"`
+	Slogan  *string        `json:"slogan"`
+	LogoURL *string        `json:"logoUrl" binding:"omitempty,url"`
+	Theme   map[string]any `json:"theme"`
+}
+
+// UpdateBrand handles PUT /admin/brand (name, slogan, logo, theme colours).
+func (h *Handler) UpdateBrand(c *gin.Context) {
+	brandID, ok := tenant.BrandFrom(c)
+	if !ok {
+		return
+	}
+	var in updateBrandInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	if in.Theme == nil {
+		in.Theme = map[string]any{}
+	}
+	theme, _ := json.Marshal(in.Theme)
+	row, err := h.q.UpdateBrand(c.Request.Context(), db.UpdateBrandParams{
+		ID: brandID, Name: in.Name, Slogan: in.Slogan, LogoUrl: in.LogoURL, Theme: theme,
+	})
+	if err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toView(row))
+}
+
+// Stats handles GET /admin/stats for the dashboard.
+func (h *Handler) Stats(c *gin.Context) {
+	brandID, ok := tenant.BrandFrom(c)
+	if !ok {
+		return
+	}
+	row, err := h.q.GetBrandStats(c.Request.Context(), brandID)
+	if err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, Stats{
+		Stores: row.Stores, Users: row.Users, Categories: row.Categories, Items: row.Items, AvailableItems: row.AvailableItems,
 	})
 }

@@ -43,3 +43,16 @@ FROM menu_items i
 JOIN stores s ON s.id = $1 AND s.brand_id = i.brand_id
 LEFT JOIN store_menu_items o ON o.item_id = i.id AND o.store_id = s.id
 ORDER BY i.category_id, i.sort_order, i.name;
+
+-- name: UpdateCategory :one
+UPDATE menu_categories
+SET name = $3, sort_order = $4, is_active = $5, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING *;
+
+-- name: UpdateItem :one
+UPDATE menu_items
+SET category_id = $3, name = $4, description = $5, image_url = $6,
+    base_price = $7, options = $8, sort_order = $9, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING *;

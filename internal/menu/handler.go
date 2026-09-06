@@ -152,3 +152,52 @@ func (h *Handler) PublicStoreMenu(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, menu)
 }
+
+func (h *Handler) UpdateCategory(c *gin.Context) {
+	brandID, ok := tenant.BrandFrom(c)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "invalid_id", "category id must be a UUID")
+		return
+	}
+	var in UpdateCategoryInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	row, err := h.svc.UpdateCategory(c.Request.Context(), brandID, id, in)
+	if err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, row)
+}
+
+func (h *Handler) UpdateItem(c *gin.Context) {
+	brandID, ok := tenant.BrandFrom(c)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "invalid_id", "item id must be a UUID")
+		return
+	}
+	var in CreateItemInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	row, err := h.svc.UpdateItem(c.Request.Context(), brandID, id, in)
+	if err != nil {
+		var ve *ValidationError
+		if errors.As(err, &ve) {
+			httpx.Fail(c, http.StatusUnprocessableEntity, "invalid_options", ve.Msg)
+			return
+		}
+		httpx.FailDB(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, row)
+}
