@@ -23,6 +23,7 @@ import (
 	"coffeesos/internal/db"
 	"coffeesos/internal/menu"
 	"coffeesos/internal/realtime"
+	"coffeesos/internal/storage"
 	"coffeesos/internal/tenant"
 )
 
@@ -50,6 +51,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	authH := auth.NewHandler(queries, issuer)
 	menuH := menu.NewHandler(menu.NewService(queries, hub), queries)
 	brandH := brand.NewHandler(queries)
+	store := storage.New(storage.Config{
+		AccountID: cfg.R2AccountID, AccessKeyID: cfg.R2AccessKeyID, SecretAccessKey: cfg.R2SecretAccessKey,
+		Bucket: cfg.R2Bucket, PublicBaseURL: cfg.R2PublicBaseURL,
+	})
+	if !store.Enabled() {
+		log.Warn("R2 storage not configured; POST /admin/uploads will return 503 (set R2_* env vars)")
+	}
+	uploadH := storage.NewHandler(store)
 
 	r.GET("/healthz", func(c *gin.Context) {
 		ctx, cancel := contextWithTimeout(c, 2*time.Second)
@@ -86,6 +95,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	admin.POST("/stores", auth.RequireLevel(tenant.LevelBrandOwner), brandH.CreateStore)
 	admin.GET("/users", auth.RequireLevel(tenant.LevelBrandOwner), brandH.ListUsers)
 	admin.POST("/users", brandH.CreateUser)
+	admin.POST("/uploads", uploadH.Upload)
 	admin.GET("/menu/categories", menuH.ListCategories)
 	admin.POST("/menu/categories", auth.RequireLevel(tenant.LevelBrandOwner), menuH.CreateCategory)
 	admin.PATCH("/menu/categories/:id", auth.RequireLevel(tenant.LevelBrandOwner), menuH.UpdateCategory)

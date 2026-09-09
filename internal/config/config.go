@@ -24,6 +24,14 @@ type Config struct {
 	AutoMigrate    bool     // run pending migrations before serving
 	LogLevel       string
 
+	// Cloudflare R2 (S3-compatible) for uploaded images. Optional: when any
+	// field is empty the upload endpoint answers 503 and the API still runs.
+	R2AccountID       string
+	R2AccessKeyID     string
+	R2SecretAccessKey string
+	R2Bucket          string
+	R2PublicBaseURL   string // https://cdn.coffeesos.online
+
 	// Used by `api seed` only.
 	SeedAdminEmail    string
 	SeedAdminPassword string
@@ -47,6 +55,11 @@ func Load() (*Config, error) {
 		TrustedProxies:    splitList(getenv("TRUSTED_PROXIES", "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")),
 		AutoMigrate:       getBool("AUTO_MIGRATE", false),
 		LogLevel:          getenv("LOG_LEVEL", "info"),
+		R2AccountID:       os.Getenv("R2_ACCOUNT_ID"),
+		R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2Bucket:          os.Getenv("R2_BUCKET"),
+		R2PublicBaseURL:   strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
 		SeedAdminEmail:    getenv("SEED_ADMIN_EMAIL", "admin@coffeesos.local"),
 		SeedAdminPassword: os.Getenv("SEED_ADMIN_PASSWORD"),
 		SeedDemo:          getBool("SEED_DEMO", true),

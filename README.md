@@ -80,6 +80,7 @@ brew install sqlc && make sqlc
 | POST   | /api/v1/admin/stores                      | brand owner +    |
 | GET    | /api/v1/admin/users                       | brand owner +    |
 | POST   | /api/v1/admin/users                       | store manager +  |
+| POST   | /api/v1/admin/uploads                     | store manager +  |
 | GET    | /api/v1/admin/menu/categories             | store manager +  |
 | POST   | /api/v1/admin/menu/categories             | brand owner +    |
 | PATCH  | /api/v1/admin/menu/categories/:id         | brand owner +    |
@@ -92,6 +93,19 @@ brew install sqlc && make sqlc
 
 Toggling availability broadcasts `menu.item.availability` to the brand room on
 `/ws`, so POS terminals and apps drop sold-out items immediately.
+
+### File uploads (Cloudflare R2)
+
+`POST /api/v1/admin/uploads` takes `multipart/form-data` with `file` (JPEG,
+PNG, WebP, GIF; SVG for logos) and `kind` = `menu-items` | `brand-logos`
+(logos: brand owner only), max 10 MB, and answers `{key, url}`. The caller then
+saves `url` as the item's `imageUrl` or the brand's `logoUrl`. Objects live at
+`brands/{brandId}/{kind}/{uuid}.{ext}` in the bucket and are served through the
+bucket's custom domain (`R2_PUBLIC_URL`) with an immutable cache header.
+
+Configure with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`R2_BUCKET`, `R2_PUBLIC_URL` (see `.env.example`). When unset the endpoint
+returns 503 `storage_not_configured` and everything else keeps working.
 
 ## Deploy (Docker host)
 
