@@ -158,4 +158,5 @@ type User struct {
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
 	PinHash      *string    `json:"pinHash"`
+	AvatarUrl    *string    `json:"avatarUrl"`
 }

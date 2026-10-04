@@ -49,7 +49,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	issuer := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
 	hub := realtime.NewHub(log, originChecker(cfg))
 
-	authH := auth.NewHandler(queries, issuer)
 	menuH := menu.NewHandler(menu.NewService(queries, hub), queries)
 	brandH := brand.NewHandler(queries)
 	store := storage.New(storage.Config{
@@ -60,6 +59,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 		log.Warn("R2 storage not configured; POST /admin/uploads will return 503 (set R2_* env vars)")
 	}
 	uploadH := storage.NewHandler(store)
+	authH := auth.NewHandler(queries, issuer, uploadH)
 	orderH := order.NewHandler(order.NewService(pool, queries, hub), queries)
 
 	r.GET("/healthz", func(c *gin.Context) {
@@ -99,6 +99,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	admin.GET("/users", auth.RequireLevel(tenant.LevelBrandOwner), brandH.ListUsers)
 	admin.POST("/users", brandH.CreateUser)
 	admin.PUT("/users/:id/pin", authH.SetPin)
+	admin.PUT("/users/:id/avatar", authH.SetAvatar)
 	admin.POST("/uploads", uploadH.Upload)
 	admin.GET("/menu/categories", menuH.ListCategories)
 	admin.POST("/menu/categories", auth.RequireLevel(tenant.LevelBrandOwner), menuH.CreateCategory)
@@ -113,6 +114,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	pos.GET("/menu", menuH.StoreMenu)
 	pos.PATCH("/menu/items/:id/availability", orderH.SetAvailability)
 	pos.GET("/store", orderH.Store)
+	pos.POST("/me/avatar", authH.UploadAvatar)
 	pos.GET("/customers/lookup", orderH.LookupCustomer)
 	pos.POST("/customers", orderH.CreateCustomer)
 	pos.GET("/promotions/:code", orderH.Promotion)

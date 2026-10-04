@@ -44,3 +44,13 @@ FROM users u
 LEFT JOIN brands b ON b.id = u.brand_id
 LEFT JOIN stores s ON s.id = u.store_id
 WHERE u.id = $1;
+
+-- name: SetUserAvatar :one
+UPDATE users SET avatar_url = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: SetUserAvatarInBrand :one
+UPDATE users SET avatar_url = $3, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING *;

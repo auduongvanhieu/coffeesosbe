@@ -42,11 +42,12 @@ type Kind string
 const (
 	KindMenuItem  Kind = "menu-items"
 	KindBrandLogo Kind = "brand-logos"
+	KindAvatar    Kind = "avatars"
 )
 
 func ParseKind(s string) (Kind, bool) {
 	switch Kind(s) {
-	case KindMenuItem, KindBrandLogo:
+	case KindMenuItem, KindBrandLogo, KindAvatar:
 		return Kind(s), true
 	}
 	return "", false
