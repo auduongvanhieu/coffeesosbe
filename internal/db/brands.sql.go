@@ -51,7 +51,7 @@ func (q *Queries) CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand
 const createStore = `-- name: CreateStore :one
 INSERT INTO stores (brand_id, code, name, address, phone)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at
+RETURNING id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at, bank_bin, bank_code, bank_account, bank_holder, next_order_no
 `
 
 type CreateStoreParams struct {
@@ -82,6 +82,11 @@ func (q *Queries) CreateStore(ctx context.Context, arg CreateStoreParams) (Store
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BankBin,
+		&i.BankCode,
+		&i.BankAccount,
+		&i.BankHolder,
+		&i.NextOrderNo,
 	)
 	return i, err
 }
@@ -159,7 +164,7 @@ func (q *Queries) GetBrandStats(ctx context.Context, brandID uuid.UUID) (GetBran
 }
 
 const getStoreByID = `-- name: GetStoreByID :one
-SELECT id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at FROM stores WHERE id = $1
+SELECT id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at, bank_bin, bank_code, bank_account, bank_holder, next_order_no FROM stores WHERE id = $1
 `
 
 func (q *Queries) GetStoreByID(ctx context.Context, id uuid.UUID) (Store, error) {
@@ -176,6 +181,11 @@ func (q *Queries) GetStoreByID(ctx context.Context, id uuid.UUID) (Store, error)
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BankBin,
+		&i.BankCode,
+		&i.BankAccount,
+		&i.BankHolder,
+		&i.NextOrderNo,
 	)
 	return i, err
 }
@@ -215,7 +225,7 @@ func (q *Queries) ListBrands(ctx context.Context) ([]Brand, error) {
 }
 
 const listStoresByBrand = `-- name: ListStoresByBrand :many
-SELECT id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at FROM stores WHERE brand_id = $1 ORDER BY created_at
+SELECT id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at, bank_bin, bank_code, bank_account, bank_holder, next_order_no FROM stores WHERE brand_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListStoresByBrand(ctx context.Context, brandID uuid.UUID) ([]Store, error) {
@@ -238,6 +248,11 @@ func (q *Queries) ListStoresByBrand(ctx context.Context, brandID uuid.UUID) ([]S
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BankBin,
+			&i.BankCode,
+			&i.BankAccount,
+			&i.BankHolder,
+			&i.NextOrderNo,
 		); err != nil {
 			return nil, err
 		}
@@ -247,6 +262,19 @@ func (q *Queries) ListStoresByBrand(ctx context.Context, brandID uuid.UUID) ([]S
 		return nil, err
 	}
 	return items, nil
+}
+
+const nextOrderNo = `-- name: NextOrderNo :one
+UPDATE stores SET next_order_no = next_order_no + 1
+WHERE id = $1
+RETURNING (next_order_no - 1)::integer AS order_no
+`
+
+func (q *Queries) NextOrderNo(ctx context.Context, id uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextOrderNo, id)
+	var order_no int32
+	err := row.Scan(&order_no)
+	return order_no, err
 }
 
 const updateBrand = `-- name: UpdateBrand :one
@@ -283,6 +311,50 @@ func (q *Queries) UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateStoreBank = `-- name: UpdateStoreBank :one
+UPDATE stores
+SET bank_bin = $2, bank_code = $3, bank_account = $4, bank_holder = $5, updated_at = now()
+WHERE id = $1
+RETURNING id, brand_id, code, name, address, phone, timezone, is_active, created_at, updated_at, bank_bin, bank_code, bank_account, bank_holder, next_order_no
+`
+
+type UpdateStoreBankParams struct {
+	ID          uuid.UUID `json:"id"`
+	BankBin     *string   `json:"bankBin"`
+	BankCode    *string   `json:"bankCode"`
+	BankAccount *string   `json:"bankAccount"`
+	BankHolder  *string   `json:"bankHolder"`
+}
+
+func (q *Queries) UpdateStoreBank(ctx context.Context, arg UpdateStoreBankParams) (Store, error) {
+	row := q.db.QueryRow(ctx, updateStoreBank,
+		arg.ID,
+		arg.BankBin,
+		arg.BankCode,
+		arg.BankAccount,
+		arg.BankHolder,
+	)
+	var i Store
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.Code,
+		&i.Name,
+		&i.Address,
+		&i.Phone,
+		&i.Timezone,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BankBin,
+		&i.BankCode,
+		&i.BankAccount,
+		&i.BankHolder,
+		&i.NextOrderNo,
 	)
 	return i, err
 }

@@ -26,7 +26,7 @@ func (q *Queries) CountUsersByRole(ctx context.Context, roleCode string) (int64,
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (brand_id, store_id, role_code, email, phone, full_name, password_hash)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at
+RETURNING id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at, pin_hash
 `
 
 type CreateUserParams struct {
@@ -62,12 +62,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PinHash,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT u.id, u.brand_id, u.store_id, u.role_code, u.email, u.phone, u.full_name, u.password_hash, u.is_active, u.created_at, u.updated_at, r.level AS role_level
+SELECT u.id, u.brand_id, u.store_id, u.role_code, u.email, u.phone, u.full_name, u.password_hash, u.is_active, u.created_at, u.updated_at, u.pin_hash, r.level AS role_level
 FROM users u
 JOIN roles r ON r.code = u.role_code
 WHERE lower(u.email) = lower($1)
@@ -85,6 +86,7 @@ type GetUserByEmailRow struct {
 	IsActive     bool       `json:"isActive"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	PinHash      *string    `json:"pinHash"`
 	RoleLevel    int16      `json:"roleLevel"`
 }
 
@@ -103,13 +105,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PinHash,
 		&i.RoleLevel,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT u.id, u.brand_id, u.store_id, u.role_code, u.email, u.phone, u.full_name, u.password_hash, u.is_active, u.created_at, u.updated_at, r.level AS role_level
+SELECT u.id, u.brand_id, u.store_id, u.role_code, u.email, u.phone, u.full_name, u.password_hash, u.is_active, u.created_at, u.updated_at, u.pin_hash, r.level AS role_level
 FROM users u
 JOIN roles r ON r.code = u.role_code
 WHERE u.id = $1
@@ -127,6 +130,7 @@ type GetUserByIDRow struct {
 	IsActive     bool       `json:"isActive"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	PinHash      *string    `json:"pinHash"`
 	RoleLevel    int16      `json:"roleLevel"`
 }
 
@@ -145,13 +149,97 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PinHash,
 		&i.RoleLevel,
 	)
 	return i, err
 }
 
+const getUserScope = `-- name: GetUserScope :one
+SELECT b.name AS brand_name, b.logo_url AS brand_logo_url, s.name AS store_name
+FROM users u
+LEFT JOIN brands b ON b.id = u.brand_id
+LEFT JOIN stores s ON s.id = u.store_id
+WHERE u.id = $1
+`
+
+type GetUserScopeRow struct {
+	BrandName    *string `json:"brandName"`
+	BrandLogoUrl *string `json:"brandLogoUrl"`
+	StoreName    *string `json:"storeName"`
+}
+
+func (q *Queries) GetUserScope(ctx context.Context, id uuid.UUID) (GetUserScopeRow, error) {
+	row := q.db.QueryRow(ctx, getUserScope, id)
+	var i GetUserScopeRow
+	err := row.Scan(&i.BrandName, &i.BrandLogoUrl, &i.StoreName)
+	return i, err
+}
+
+const listPinUsersByStore = `-- name: ListPinUsersByStore :many
+SELECT u.id, u.brand_id, u.store_id, u.role_code, u.email, u.phone, u.full_name, u.password_hash, u.is_active, u.created_at, u.updated_at, u.pin_hash, r.level AS role_level
+FROM users u
+JOIN roles r ON r.code = u.role_code
+JOIN stores s ON s.id = $1
+WHERE u.is_active AND u.pin_hash IS NOT NULL
+  AND u.brand_id = s.brand_id
+  AND (u.store_id = s.id OR u.store_id IS NULL)
+`
+
+type ListPinUsersByStoreRow struct {
+	ID           uuid.UUID  `json:"id"`
+	BrandID      *uuid.UUID `json:"brandId"`
+	StoreID      *uuid.UUID `json:"storeId"`
+	RoleCode     string     `json:"roleCode"`
+	Email        *string    `json:"email"`
+	Phone        *string    `json:"phone"`
+	FullName     string     `json:"fullName"`
+	PasswordHash *string    `json:"passwordHash"`
+	IsActive     bool       `json:"isActive"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+	PinHash      *string    `json:"pinHash"`
+	RoleLevel    int16      `json:"roleLevel"`
+}
+
+// Candidates for PIN login on a store terminal: staff pinned to the store plus
+// brand-level managers/owners of the same brand who have a PIN.
+func (q *Queries) ListPinUsersByStore(ctx context.Context, id uuid.UUID) ([]ListPinUsersByStoreRow, error) {
+	rows, err := q.db.Query(ctx, listPinUsersByStore, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPinUsersByStoreRow
+	for rows.Next() {
+		var i ListPinUsersByStoreRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BrandID,
+			&i.StoreID,
+			&i.RoleCode,
+			&i.Email,
+			&i.Phone,
+			&i.FullName,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PinHash,
+			&i.RoleLevel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsersByBrand = `-- name: ListUsersByBrand :many
-SELECT id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at FROM users
+SELECT id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at, pin_hash FROM users
 WHERE brand_id = $1
 ORDER BY created_at
 `
@@ -177,6 +265,7 @@ func (q *Queries) ListUsersByBrand(ctx context.Context, brandID *uuid.UUID) ([]U
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PinHash,
 		); err != nil {
 			return nil, err
 		}
@@ -186,4 +275,20 @@ func (q *Queries) ListUsersByBrand(ctx context.Context, brandID *uuid.UUID) ([]U
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserPin = `-- name: SetUserPin :exec
+UPDATE users SET pin_hash = $3, updated_at = now()
+WHERE id = $1 AND brand_id = $2
+`
+
+type SetUserPinParams struct {
+	ID      uuid.UUID  `json:"id"`
+	BrandID *uuid.UUID `json:"brandId"`
+	PinHash *string    `json:"pinHash"`
+}
+
+func (q *Queries) SetUserPin(ctx context.Context, arg SetUserPinParams) error {
+	_, err := q.db.Exec(ctx, setUserPin, arg.ID, arg.BrandID, arg.PinHash)
+	return err
 }

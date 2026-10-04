@@ -53,7 +53,8 @@ go run ./cmd/api serve          # http://localhost:8080
 ```
 
 Demo tenant after `seed`: brand **Daily Bean**, store **Quận 3**,
-`owner@dailybean.local` / `staff@dailybean.local`, password `DailyBean123`.
+`owner@dailybean.local` / `staff@dailybean.local`, password `DailyBean123`,
+staff PIN `1234`, loyalty customer `0901234567`, promo code `SALE10`.
 
 Regenerate query code after editing `internal/db/queries/*.sql` or migrations:
 
@@ -67,6 +68,7 @@ brew install sqlc && make sqlc
 |--------|-------------------------------------------|------------------|
 | GET    | /healthz                                  | public           |
 | POST   | /api/v1/auth/login                        | public           |
+| POST   | /api/v1/auth/pin-login                    | public (store terminal) |
 | GET    | /api/v1/auth/me                           | any user         |
 | GET    | /ws?token=…                               | any brand user   |
 | GET    | /api/v1/platform/brands                   | platform admin   |
@@ -80,6 +82,7 @@ brew install sqlc && make sqlc
 | POST   | /api/v1/admin/stores                      | brand owner +    |
 | GET    | /api/v1/admin/users                       | brand owner +    |
 | POST   | /api/v1/admin/users                       | store manager +  |
+| PUT    | /api/v1/admin/users/:id/pin               | store manager +  |
 | POST   | /api/v1/admin/uploads                     | store manager +  |
 | GET    | /api/v1/admin/menu/categories             | store manager +  |
 | POST   | /api/v1/admin/menu/categories             | brand owner +    |
@@ -89,7 +92,24 @@ brew install sqlc && make sqlc
 | PUT    | /api/v1/admin/menu/items/:id              | brand owner +    |
 | PATCH  | /api/v1/admin/menu/items/:id/availability | store manager +  |
 | GET    | /api/v1/pos/menu                          | staff +          |
+| PATCH  | /api/v1/pos/menu/items/:id/availability   | staff + (store override) |
+| GET    | /api/v1/pos/store                         | staff +          |
+| GET    | /api/v1/pos/customers/lookup?phone=       | staff +          |
+| POST   | /api/v1/pos/customers                     | staff +          |
+| GET    | /api/v1/pos/promotions/:code              | staff +          |
+| GET    | /api/v1/pos/orders?status=&source=&date=  | staff +          |
+| GET    | /api/v1/pos/orders/summary?date=          | staff +          |
+| POST   | /api/v1/pos/orders                        | staff +          |
+| GET    | /api/v1/pos/orders/:id                    | staff +          |
+| PUT    | /api/v1/pos/orders/:id                    | staff +          |
+| POST   | /api/v1/pos/orders/:id/pay                | staff +          |
+| PATCH  | /api/v1/pos/orders/:id/status             | staff +          |
 | GET    | /api/v1/app/stores/:storeId/menu          | public           |
+| POST   | /api/v1/app/stores/:storeId/orders        | public           |
+
+Request/response shapes for the POS routes are in [`docs/pos-api.md`](docs/pos-api.md).
+Orders are priced server-side from the store menu; `order.created` /
+`order.updated` are pushed to the store room on `/ws`.
 
 Toggling availability broadcasts `menu.item.availability` to the brand room on
 `/ws`, so POS terminals and apps drop sold-out items immediately.
@@ -128,5 +148,5 @@ The site config is `deploy/nginx/dev.coffeesos.online.conf` (copy to
 
 ## Next modules
 
-Orders (with WebSocket push to the barista screen), payments (cash, VietQR,
-MoMo/ZaloPay), customer phone+OTP auth, loyalty points, promotions, reports.
+Barista/kitchen display, real MoMo/ZaloPay/VietQR payment callbacks, customer
+phone+OTP auth, promotion management in Admin, reports, offline-first POS.

@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS promotions;
+DROP TABLE IF EXISTS customers;
+ALTER TABLE stores
+    DROP COLUMN IF EXISTS bank_bin,
+    DROP COLUMN IF EXISTS bank_code,
+    DROP COLUMN IF EXISTS bank_account,
+    DROP COLUMN IF EXISTS bank_holder,
+    DROP COLUMN IF EXISTS next_order_no;
+ALTER TABLE users DROP COLUMN IF EXISTS pin_hash;

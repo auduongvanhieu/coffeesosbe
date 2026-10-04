@@ -36,3 +36,14 @@ SELECT
   (SELECT count(*) FROM menu_categories c WHERE c.brand_id = $1 AND c.is_active)::bigint    AS categories,
   (SELECT count(*) FROM menu_items i      WHERE i.brand_id = $1)::bigint                    AS items,
   (SELECT count(*) FROM menu_items i      WHERE i.brand_id = $1 AND i.is_available)::bigint AS available_items;
+
+-- name: UpdateStoreBank :one
+UPDATE stores
+SET bank_bin = $2, bank_code = $3, bank_account = $4, bank_holder = $5, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: NextOrderNo :one
+UPDATE stores SET next_order_no = next_order_no + 1
+WHERE id = $1
+RETURNING (next_order_no - 1)::integer AS order_no;

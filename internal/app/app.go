@@ -22,6 +22,7 @@ import (
 	"coffeesos/internal/config"
 	"coffeesos/internal/db"
 	"coffeesos/internal/menu"
+	"coffeesos/internal/order"
 	"coffeesos/internal/realtime"
 	"coffeesos/internal/storage"
 	"coffeesos/internal/tenant"
@@ -59,6 +60,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 		log.Warn("R2 storage not configured; POST /admin/uploads will return 503 (set R2_* env vars)")
 	}
 	uploadH := storage.NewHandler(store)
+	orderH := order.NewHandler(order.NewService(pool, queries, hub), queries)
 
 	r.GET("/healthz", func(c *gin.Context) {
 		ctx, cancel := contextWithTimeout(c, 2*time.Second)
@@ -74,6 +76,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 
 	// Auth
 	v1.POST("/auth/login", authH.Login)
+	v1.POST("/auth/pin-login", authH.PinLogin)
 	v1.GET("/auth/me", auth.RequireAuth(issuer), authH.Me)
 
 	// Realtime
@@ -95,6 +98,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	admin.POST("/stores", auth.RequireLevel(tenant.LevelBrandOwner), brandH.CreateStore)
 	admin.GET("/users", auth.RequireLevel(tenant.LevelBrandOwner), brandH.ListUsers)
 	admin.POST("/users", brandH.CreateUser)
+	admin.PUT("/users/:id/pin", authH.SetPin)
 	admin.POST("/uploads", uploadH.Upload)
 	admin.GET("/menu/categories", menuH.ListCategories)
 	admin.POST("/menu/categories", auth.RequireLevel(tenant.LevelBrandOwner), menuH.CreateCategory)
@@ -107,10 +111,23 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	// POS
 	pos := v1.Group("/pos", auth.RequireAuth(issuer), auth.RequireLevel(tenant.LevelStaff))
 	pos.GET("/menu", menuH.StoreMenu)
+	pos.PATCH("/menu/items/:id/availability", orderH.SetAvailability)
+	pos.GET("/store", orderH.Store)
+	pos.GET("/customers/lookup", orderH.LookupCustomer)
+	pos.POST("/customers", orderH.CreateCustomer)
+	pos.GET("/promotions/:code", orderH.Promotion)
+	pos.GET("/orders", orderH.List)
+	pos.GET("/orders/summary", orderH.Summary)
+	pos.POST("/orders", orderH.Create)
+	pos.GET("/orders/:id", orderH.Get)
+	pos.PUT("/orders/:id", orderH.Replace)
+	pos.POST("/orders/:id/pay", orderH.Pay)
+	pos.PATCH("/orders/:id/status", orderH.SetStatus)
 
 	// Customer app (public endpoints)
 	customer := v1.Group("/app")
 	customer.GET("/stores/:storeId/menu", menuH.PublicStoreMenu)
+	customer.POST("/stores/:storeId/orders", orderH.CreateFromApp)
 
 	return &App{Engine: r, Hub: hub}
 }

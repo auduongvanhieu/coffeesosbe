@@ -21,6 +21,7 @@ import (
 	"coffeesos/internal/config"
 	"coffeesos/internal/db"
 	"coffeesos/internal/menu"
+	"coffeesos/internal/order"
 	"coffeesos/internal/tenant"
 )
 
@@ -29,6 +30,9 @@ const (
 	DemoOwnerEmail = "owner@dailybean.local"
 	DemoStaffEmail = "staff@dailybean.local"
 	DemoPassword   = "DailyBean123"
+	DemoStaffPIN   = "1234"
+	DemoPromoCode  = "SALE10"
+	DemoCustomer   = "0901234567"
 )
 
 func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger) error {
@@ -39,6 +43,9 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 	}
 	if cfg.SeedDemo {
 		if err := seedDemoBrand(ctx, q, log); err != nil {
+			return err
+		}
+		if err := seedDemoExtras(ctx, pool, q, log); err != nil {
 			return err
 		}
 	}
@@ -199,4 +206,110 @@ func randomPassword() string {
 		panic(err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf)
+}
+
+// seedDemoExtras adds the POS-phase demo data (staff PIN, bank account for
+// VietQR, a loyalty customer, a promo code, a few app orders). It runs on
+// every seed and only fills what is missing, so existing deployments pick it up.
+func seedDemoExtras(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, log *slog.Logger) error {
+	b, err := q.GetBrandBySlug(ctx, DemoBrandSlug)
+	if err != nil {
+		return fmt.Errorf("lookup demo brand: %w", err)
+	}
+	stores, err := q.ListStoresByBrand(ctx, b.ID)
+	if err != nil || len(stores) == 0 {
+		return fmt.Errorf("demo store missing: %w", err)
+	}
+	store := stores[0]
+
+	// Staff PIN
+	if u, err := q.GetUserByEmail(ctx, DemoStaffEmail); err == nil && u.PinHash == nil {
+		hash, err := auth.HashPassword(DemoStaffPIN)
+		if err != nil {
+			return err
+		}
+		if err := q.SetUserPin(ctx, db.SetUserPinParams{ID: u.ID, BrandID: &b.ID, PinHash: &hash}); err != nil {
+			return fmt.Errorf("set staff pin: %w", err)
+		}
+		log.Info("seed: staff PIN set", "email", DemoStaffEmail, "pin", DemoStaffPIN)
+	}
+
+	// Bank account shown as VietQR on the payment screen
+	if store.BankAccount == nil {
+		bin, code, acc, holder := "970436", "VCB", "0011002234", "CAFE NHA MINH"
+		if store, err = q.UpdateStoreBank(ctx, db.UpdateStoreBankParams{ID: store.ID, BankBin: &bin, BankCode: &code, BankAccount: &acc, BankHolder: &holder}); err != nil {
+			return fmt.Errorf("set store bank: %w", err)
+		}
+	}
+
+	// Loyalty customer (gold tier) and promo code
+	if _, err := q.GetCustomerByPhone(ctx, db.GetCustomerByPhoneParams{BrandID: b.ID, Phone: DemoCustomer}); errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.CreateCustomer(ctx, db.CreateCustomerParams{BrandID: b.ID, Phone: DemoCustomer, Name: "Nguyễn An", Points: 120}); err != nil {
+			return fmt.Errorf("create demo customer: %w", err)
+		}
+	}
+	if _, err := q.GetPromotionByCode(ctx, db.GetPromotionByCodeParams{BrandID: b.ID, Upper: DemoPromoCode}); errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.CreatePromotion(ctx, db.CreatePromotionParams{BrandID: b.ID, Code: DemoPromoCode, Name: "Giảm 10%", Type: "percent", Value: 10}); err != nil {
+			return fmt.Errorf("create demo promotion: %w", err)
+		}
+	}
+
+	// A few app orders so the "Đơn từ app" screen is not empty
+	n, err := q.CountOrdersByStore(ctx, store.ID)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	items, err := q.ListStoreMenu(ctx, store.ID)
+	if err != nil {
+		return err
+	}
+	byName := map[string]uuid.UUID{}
+	for _, it := range items {
+		byName[it.Name] = it.ID
+	}
+	svc := order.NewService(pool, q, nil)
+	momo := "momo"
+	samples := []struct {
+		name, phone string
+		paid        bool
+		method      *string
+		status      string
+		items       []order.LineInput
+	}{
+		{"Nguyễn An", DemoCustomer, false, nil, order.StatusPending, []order.LineInput{
+			{ItemID: byName["Cà phê sữa đá"], Quantity: 1, Choices: []order.ChoiceInput{{Group: "size", Code: "l"}, {Group: "ice", Code: "less"}, {Group: "sugar", Code: "100"}}},
+			{ItemID: byName["Trà đào cam sả"], Quantity: 2, Choices: []order.ChoiceInput{{Group: "size", Code: "m"}, {Group: "ice", Code: "normal"}, {Group: "sugar", Code: "100"}}},
+		}},
+		{"Trần Bình", "0912345678", true, &momo, order.StatusPending, []order.LineInput{
+			{ItemID: byName["Cookies & Cream"], Quantity: 1, Choices: []order.ChoiceInput{{Group: "size", Code: "m"}}},
+			{ItemID: byName["Bánh croissant"], Quantity: 1},
+		}},
+		{"Lê Chi", "0987654321", true, &momo, order.StatusReady, []order.LineInput{
+			{ItemID: byName["Bạc xỉu"], Quantity: 2, Choices: []order.ChoiceInput{{Group: "size", Code: "m"}, {Group: "ice", Code: "normal"}, {Group: "sugar", Code: "70"}}},
+		}},
+	}
+	for _, sm := range samples {
+		v, err := svc.CreateFromApp(ctx, store, order.AppCreateInput{
+			CustomerName: sm.name, CustomerPhone: sm.phone, OrderType: order.TypePickup,
+			PaymentMethod: sm.method, Paid: sm.paid, Items: sm.items,
+		})
+		if err != nil {
+			return fmt.Errorf("create sample app order: %w", err)
+		}
+		if sm.status != order.StatusPending {
+			if _, err := svc.SetStatus(ctx, store.ID, v.ID, order.StatusPreparing); err != nil {
+				return err
+			}
+			if sm.status == order.StatusReady {
+				if _, err := svc.SetStatus(ctx, store.ID, v.ID, order.StatusReady); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	log.Info("seed: demo app orders created", "count", len(samples))
+	return nil
 }

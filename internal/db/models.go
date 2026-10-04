@@ -22,6 +22,16 @@ type Brand struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type Customer struct {
+	ID        uuid.UUID `json:"id"`
+	BrandID   uuid.UUID `json:"brandId"`
+	Phone     string    `json:"phone"`
+	Name      string    `json:"name"`
+	Points    int32     `json:"points"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type MenuCategory struct {
 	ID        uuid.UUID `json:"id"`
 	BrandID   uuid.UUID `json:"brandId"`
@@ -47,6 +57,62 @@ type MenuItem struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
+type Order struct {
+	ID            uuid.UUID  `json:"id"`
+	BrandID       uuid.UUID  `json:"brandId"`
+	StoreID       uuid.UUID  `json:"storeId"`
+	OrderNo       int32      `json:"orderNo"`
+	Number        string     `json:"number"`
+	Source        string     `json:"source"`
+	OrderType     string     `json:"orderType"`
+	TableLabel    *string    `json:"tableLabel"`
+	Status        string     `json:"status"`
+	PaymentStatus string     `json:"paymentStatus"`
+	PaymentMethod *string    `json:"paymentMethod"`
+	CashReceived  *int64     `json:"cashReceived"`
+	ChangeDue     *int64     `json:"changeDue"`
+	CustomerID    *uuid.UUID `json:"customerId"`
+	CustomerName  *string    `json:"customerName"`
+	CustomerPhone *string    `json:"customerPhone"`
+	PromotionCode *string    `json:"promotionCode"`
+	Subtotal      int64      `json:"subtotal"`
+	Discount      int64      `json:"discount"`
+	Total         int64      `json:"total"`
+	PointsEarned  int32      `json:"pointsEarned"`
+	Note          *string    `json:"note"`
+	CreatedBy     *uuid.UUID `json:"createdBy"`
+	PaidAt        *time.Time `json:"paidAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+type OrderItem struct {
+	ID          uuid.UUID  `json:"id"`
+	OrderID     uuid.UUID  `json:"orderId"`
+	ItemID      *uuid.UUID `json:"itemId"`
+	Name        string     `json:"name"`
+	Quantity    int32      `json:"quantity"`
+	UnitPrice   int64      `json:"unitPrice"`
+	LineTotal   int64      `json:"lineTotal"`
+	Choices     []byte     `json:"choices"`
+	OptionsText string     `json:"optionsText"`
+	Note        *string    `json:"note"`
+	SortOrder   int32      `json:"sortOrder"`
+}
+
+type Promotion struct {
+	ID          uuid.UUID `json:"id"`
+	BrandID     uuid.UUID `json:"brandId"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Type        string    `json:"type"`
+	Value       int64     `json:"value"`
+	MinSubtotal int64     `json:"minSubtotal"`
+	IsActive    bool      `json:"isActive"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type Role struct {
 	Code  string `json:"code"`
 	Name  string `json:"name"`
@@ -54,16 +120,21 @@ type Role struct {
 }
 
 type Store struct {
-	ID        uuid.UUID `json:"id"`
-	BrandID   uuid.UUID `json:"brandId"`
-	Code      string    `json:"code"`
-	Name      string    `json:"name"`
-	Address   *string   `json:"address"`
-	Phone     *string   `json:"phone"`
-	Timezone  string    `json:"timezone"`
-	IsActive  bool      `json:"isActive"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID          uuid.UUID `json:"id"`
+	BrandID     uuid.UUID `json:"brandId"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Address     *string   `json:"address"`
+	Phone       *string   `json:"phone"`
+	Timezone    string    `json:"timezone"`
+	IsActive    bool      `json:"isActive"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	BankBin     *string   `json:"bankBin"`
+	BankCode    *string   `json:"bankCode"`
+	BankAccount *string   `json:"bankAccount"`
+	BankHolder  *string   `json:"bankHolder"`
+	NextOrderNo int32     `json:"nextOrderNo"`
 }
 
 type StoreMenuItem struct {
@@ -86,4 +157,5 @@ type User struct {
 	IsActive     bool       `json:"isActive"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	PinHash      *string    `json:"pinHash"`
 }
