@@ -12,11 +12,13 @@ Money is integer VND. Times are RFC3339 UTC.
 | POST | `/auth/login` | `{email, password}` → `LoginResponse` |
 | POST | `/auth/pin-login` | `{storeId, pin}` → `LoginResponse` (401 `invalid_pin`) |
 | GET | `/auth/me` | → `UserView` |
+| POST | `/pos/me/avatar` | multipart `file` (JPEG/PNG/WebP/GIF ≤ 10 MB) → `UserView` with the new `avatarUrl` |
+| PUT | `/admin/users/:id/avatar` | `{avatarUrl}` (null clears; store manager+) → `{id, avatarUrl}` |
 
 ```
 LoginResponse { accessToken, tokenType: "Bearer", expiresAt, user: UserView }
 UserView {
-  id, brandId, storeId, role, level, email, fullName,
+  id, brandId, storeId, role, level, email, fullName, avatarUrl,
   brandName, brandLogoUrl, storeName        // null when not in scope
 }
 ```

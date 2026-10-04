@@ -83,6 +83,7 @@ brew install sqlc && make sqlc
 | GET    | /api/v1/admin/users                       | brand owner +    |
 | POST   | /api/v1/admin/users                       | store manager +  |
 | PUT    | /api/v1/admin/users/:id/pin               | store manager +  |
+| PUT    | /api/v1/admin/users/:id/avatar            | store manager +  |
 | POST   | /api/v1/admin/uploads                     | store manager +  |
 | GET    | /api/v1/admin/menu/categories             | store manager +  |
 | POST   | /api/v1/admin/menu/categories             | brand owner +    |
@@ -94,6 +95,7 @@ brew install sqlc && make sqlc
 | GET    | /api/v1/pos/menu                          | staff +          |
 | PATCH  | /api/v1/pos/menu/items/:id/availability   | staff + (store override) |
 | GET    | /api/v1/pos/store                         | staff +          |
+| POST   | /api/v1/pos/me/avatar                     | staff + (multipart) |
 | GET    | /api/v1/pos/customers/lookup?phone=       | staff +          |
 | POST   | /api/v1/pos/customers                     | staff +          |
 | GET    | /api/v1/pos/promotions/:code              | staff +          |
