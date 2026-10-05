@@ -83,6 +83,7 @@ type createArgs struct {
 	source, status   string
 	orderType        string
 	tableLabel       *string
+	tableID          *uuid.UUID
 	customer         *db.Customer
 	guestName        *string
 	guestPhone       *string
@@ -165,7 +166,7 @@ func (s *Service) create(ctx context.Context, a createArgs) (View, error) {
 	}
 	o, err := qtx.CreateOrder(ctx, db.CreateOrderParams{
 		BrandID: a.brandID, StoreID: a.storeID, OrderNo: no, Number: fmt.Sprintf("%s-%04d", prefix, no),
-		Source: a.source, OrderType: a.orderType, TableLabel: a.tableLabel, Status: a.status,
+		Source: a.source, OrderType: a.orderType, TableLabel: a.tableLabel, TableID: a.tableID, Status: a.status,
 		PaymentStatus: paymentStat, PaymentMethod: a.paymentMethod, PaidAt: paidAt,
 		CustomerID: custID, CustomerName: custName, CustomerPhone: custPhone, PromotionCode: promoCode,
 		Subtotal: cart.Subtotal, Discount: cart.Discount, Total: cart.Total, PointsEarned: cart.Points,
@@ -213,15 +214,40 @@ func (s *Service) Create(ctx context.Context, brandID, storeID, userID uuid.UUID
 	if err != nil {
 		return View{}, err
 	}
+	tableID, label, err := s.tableFor(ctx, storeID, in)
+	if err != nil {
+		return View{}, err
+	}
 	v, err := s.create(ctx, createArgs{
 		brandID: brandID, storeID: storeID, source: SourcePOS, status: StatusOpen,
-		orderType: in.OrderType, tableLabel: in.TableLabel, customer: cust, promoCode: in.PromotionCode,
+		orderType: in.OrderType, tableLabel: label, tableID: tableID, customer: cust, promoCode: in.PromotionCode,
 		note: in.Note, createdBy: &userID, items: in.Items,
 	})
 	if err != nil {
 		return View{}, err
 	}
+	s.notifyTables(storeID)
+	s.broadcast(storeID, EventOrderCreated, v)
 	return s.withCreator(ctx, v, &userID), nil
+}
+
+// tableFor resolves the table a dine-in order sits at. The table's own name
+// wins over any label the client sent, so tickets and the floor plan agree.
+func (s *Service) tableFor(ctx context.Context, storeID uuid.UUID, in CreateInput) (*uuid.UUID, *string, error) {
+	if in.OrderType == TypeTakeaway || in.TableID == nil {
+		if in.OrderType == TypeTakeaway {
+			return nil, nil, nil
+		}
+		return nil, in.TableLabel, nil
+	}
+	t, err := s.q.GetStoreTable(ctx, db.GetStoreTableParams{ID: *in.TableID, StoreID: storeID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, invalid("bàn không thuộc cửa hàng này")
+		}
+		return nil, nil, err
+	}
+	return &t.ID, &t.Name, nil
 }
 
 // Replace handles PUT /pos/orders/:id: re-price and overwrite an open order.
@@ -234,6 +260,10 @@ func (s *Service) Replace(ctx context.Context, brandID, storeID, id uuid.UUID, i
 		return View{}, &StateError{Code: "not_open", Msg: "chỉ sửa được đơn đang mở"}
 	}
 	cust, err := s.customerFor(ctx, brandID, in.CustomerID)
+	if err != nil {
+		return View{}, err
+	}
+	tableID, label, err := s.tableFor(ctx, storeID, in)
 	if err != nil {
 		return View{}, err
 	}
@@ -259,7 +289,7 @@ func (s *Service) Replace(ctx context.Context, brandID, storeID, id uuid.UUID, i
 		custID, custName, custPhone = &cust.ID, &cust.Name, &cust.Phone
 	}
 	o, err = qtx.ReplaceOrderHeader(ctx, db.ReplaceOrderHeaderParams{
-		ID: id, StoreID: storeID, OrderType: in.OrderType, TableLabel: in.TableLabel,
+		ID: id, StoreID: storeID, OrderType: in.OrderType, TableLabel: label, TableID: tableID,
 		CustomerID: custID, CustomerName: custName, CustomerPhone: custPhone, PromotionCode: promoCode,
 		Subtotal: cart.Subtotal, Discount: cart.Discount, Total: cart.Total, PointsEarned: cart.Points, Note: in.Note,
 	})
@@ -273,7 +303,10 @@ func (s *Service) Replace(ctx context.Context, brandID, storeID, id uuid.UUID, i
 	if err := tx.Commit(ctx); err != nil {
 		return View{}, err
 	}
-	return s.withCreator(ctx, toView(o, items, cust, nil), o.CreatedBy), nil
+	v := s.withCreator(ctx, toView(o, items, cust, nil), o.CreatedBy)
+	s.notifyTables(storeID)
+	s.broadcast(storeID, EventOrderUpdated, v)
+	return v, nil
 }
 
 // CreateFromApp handles the public customer-app endpoint.
@@ -362,6 +395,7 @@ func (s *Service) Pay(ctx context.Context, brandID, storeID, id uuid.UUID, in Pa
 		return View{}, err
 	}
 	s.broadcast(storeID, EventOrderUpdated, v)
+	s.notifyTables(storeID)
 	return v, nil
 }
 
@@ -396,6 +430,7 @@ func (s *Service) SetStatus(ctx context.Context, storeID, id uuid.UUID, status s
 		return View{}, err
 	}
 	s.broadcast(storeID, EventOrderUpdated, v)
+	s.notifyTables(storeID)
 	return v, nil
 }
 

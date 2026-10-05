@@ -254,6 +254,27 @@ func seedDemoExtras(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, log 
 		}
 	}
 
+	// Floor plan: 10 tables so the overview screen has something to show.
+	if n, err := q.CountStoreTables(ctx, store.ID); err == nil && n == 0 {
+		zones := []struct {
+			name  string
+			count int
+			seats int16
+		}{{"Trong nhà", 6, 4}, {"Ngoài sân", 4, 2}}
+		i := 0
+		for _, z := range zones {
+			for k := 0; k < z.count; k++ {
+				i++
+				if _, err := q.CreateStoreTable(ctx, db.CreateStoreTableParams{
+					StoreID: store.ID, Name: fmt.Sprintf("Bàn %02d", i), Zone: z.name, Seats: z.seats, SortOrder: int32(i),
+				}); err != nil {
+					return fmt.Errorf("create table %d: %w", i, err)
+				}
+			}
+		}
+		log.Info("seed: tables created", "count", i)
+	}
+
 	// A few app orders so the "Đơn từ app" screen is not empty
 	n, err := q.CountOrdersByStore(ctx, store.ID)
 	if err != nil {

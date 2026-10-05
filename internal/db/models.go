@@ -84,6 +84,7 @@ type Order struct {
 	PaidAt        *time.Time `json:"paidAt"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
+	TableID       *uuid.UUID `json:"tableId"`
 }
 
 type OrderItem struct {
@@ -143,6 +144,18 @@ type StoreMenuItem struct {
 	PriceOverride *int64    `json:"priceOverride"`
 	IsAvailable   bool      `json:"isAvailable"`
 	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+type StoreTable struct {
+	ID        uuid.UUID `json:"id"`
+	StoreID   uuid.UUID `json:"storeId"`
+	Name      string    `json:"name"`
+	Zone      string    `json:"zone"`
+	Seats     int16     `json:"seats"`
+	SortOrder int32     `json:"sortOrder"`
+	IsActive  bool      `json:"isActive"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type User struct {

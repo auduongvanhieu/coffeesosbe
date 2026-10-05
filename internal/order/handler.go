@@ -80,6 +80,79 @@ func (h *Handler) Store(c *gin.Context) {
 	c.JSON(http.StatusOK, v)
 }
 
+// --- tables (floor plan) ---
+
+// Tables serves GET /pos/tables.
+func (h *Handler) Tables(c *gin.Context) {
+	_, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	plan, err := h.svc.Tables(c.Request.Context(), storeID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, plan)
+}
+
+// CreateTable serves POST /pos/tables (store manager and above).
+func (h *Handler) CreateTable(c *gin.Context) {
+	_, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	var in TableInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	t, err := h.svc.CreateTable(c.Request.Context(), storeID, in)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, t)
+}
+
+// UpdateTable serves PUT /pos/tables/:id.
+func (h *Handler) UpdateTable(c *gin.Context) {
+	_, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var in TableInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	t, err := h.svc.UpdateTable(c.Request.Context(), storeID, id, in)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, t)
+}
+
+// DeleteTable serves DELETE /pos/tables/:id (soft delete).
+func (h *Handler) DeleteTable(c *gin.Context) {
+	_, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteTable(c.Request.Context(), storeID, id); err != nil {
+		fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // --- customers ---
 
 func (h *Handler) LookupCustomer(c *gin.Context) {

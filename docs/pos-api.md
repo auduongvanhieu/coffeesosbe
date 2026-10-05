@@ -41,6 +41,35 @@ OptionGroup { code, name, type: "single"|"multi", required, choices: [{code, nam
 `PATCH /pos/menu/items/:id/availability` `{available: bool}` → `{itemId, available}`
 (store-level override, used by the "Hết món" screen; broadcasts `menu.item.availability`).
 
+## Tables (floor plan)
+
+| Method | Path | Body → Response |
+|---|---|---|
+| GET | `/pos/tables` | → `FloorPlan` |
+| POST | `/pos/tables` | `TableInput` → 201 `Table` (store manager +) |
+| PUT | `/pos/tables/:id` | `TableInput` → `Table` (store manager +) |
+| DELETE | `/pos/tables/:id` | → 204, soft delete (store manager +) |
+
+```
+TableInput { name: "Bàn 11", zone?: "Ngoài sân", seats?: 4, sortOrder?: 11, isActive?: true }
+FloorPlan {
+  tables: [Table], zones: ["Trong nhà", "Ngoài sân"],
+  total, free, serving, paid,      // counters for the header
+  openRevenue,                     // money sitting on unpaid tables
+  takeawayOpen                     // held takeaway orders, no table
+}
+Table {
+  id, name, zone, seats, isActive,
+  status: "free" | "serving" | "paid",
+  orderId, orderNumber, orderStatus, paymentStatus, total, itemCount, openedAt, minutes  // null when free
+}
+```
+A table is `serving` while its order is unpaid, `paid` once it is paid but the
+order is still being prepared or waiting for pickup, and `free` again when the
+order reaches `completed` / `cancelled`. `POST /pos/orders` accepts `tableId`;
+the table's own name overwrites `tableLabel` so tickets and the plan agree.
+Every order change broadcasts `tables.changed` on the store room.
+
 ## Customers (loyalty)
 
 | Method | Path | Body → Response |
@@ -67,7 +96,8 @@ Demo: `SALE10` = 10% off.
 ```
 CreateOrderInput {
   orderType: "dine_in"|"takeaway",
-  tableLabel?: "Bàn 05",
+  tableId?: uuid,              // preferred; its name becomes tableLabel
+  tableLabel?: "Bàn 05",       // free text fallback
   customerId?: uuid,
   promotionCode?: "SALE10",
   note?: string,
@@ -136,6 +166,7 @@ completed=Đã giao, rejected=Đã từ chối, cancelled=Đã huỷ.
 * `order.created` `{order: Order}` — new app order for this store
 * `order.updated` `{order: Order}` — status / payment changed
 * `menu.item.availability` `{itemId, isAvailable}`
+* `tables.changed` `{storeId}` — refetch `/pos/tables`
 
 ## VietQR
 

@@ -1,0 +1,2 @@
+ALTER TABLE orders DROP COLUMN IF EXISTS table_id;
+DROP TABLE IF EXISTS store_tables;

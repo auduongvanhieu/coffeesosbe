@@ -1,20 +1,20 @@
 -- name: CreateOrder :one
 INSERT INTO orders (
-    brand_id, store_id, order_no, number, source, order_type, table_label, status,
+    brand_id, store_id, order_no, number, source, order_type, table_label, table_id, status,
     payment_status, payment_method, paid_at,
     customer_id, customer_name, customer_phone, promotion_code,
     subtotal, discount, total, points_earned, note, created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11,
-    $12, $13, $14, $15,
-    $16, $17, $18, $19, $20, $21
+    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    $10, $11, $12,
+    $13, $14, $15, $16,
+    $17, $18, $19, $20, $21, $22
 )
 RETURNING *;
 
 -- name: ReplaceOrderHeader :one
 UPDATE orders
-SET order_type = $3, table_label = $4, customer_id = $5, customer_name = $6, customer_phone = $7,
+SET order_type = $3, table_label = $4, table_id = $14, customer_id = $5, customer_name = $6, customer_phone = $7,
     promotion_code = $8, subtotal = $9, discount = $10, total = $11, points_earned = $12,
     note = $13, updated_at = now()
 WHERE id = $1 AND store_id = $2

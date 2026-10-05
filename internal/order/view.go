@@ -59,6 +59,7 @@ type LineInput struct {
 type CreateInput struct {
 	OrderType     string      `json:"orderType" binding:"required,oneof=dine_in takeaway"`
 	TableLabel    *string     `json:"tableLabel" binding:"omitempty,max=32"`
+	TableID       *uuid.UUID  `json:"tableId"`
 	CustomerID    *uuid.UUID  `json:"customerId"`
 	PromotionCode *string     `json:"promotionCode" binding:"omitempty,max=32"`
 	Note          *string     `json:"note" binding:"omitempty,max=500"`
@@ -130,6 +131,7 @@ type View struct {
 	Source        string        `json:"source"`
 	OrderType     string        `json:"orderType"`
 	TableLabel    *string       `json:"tableLabel"`
+	TableID       *uuid.UUID    `json:"tableId"`
 	Status        string        `json:"status"`
 	PaymentStatus string        `json:"paymentStatus"`
 	PaymentMethod *string       `json:"paymentMethod"`
@@ -226,7 +228,7 @@ func toView(o db.Order, items []db.OrderItem, customer *db.Customer, createdBy *
 	}
 	v := View{
 		ID: o.ID, Number: o.Number, Source: o.Source, OrderType: o.OrderType, TableLabel: o.TableLabel,
-		Status: o.Status, PaymentStatus: o.PaymentStatus, PaymentMethod: o.PaymentMethod,
+		TableID: o.TableID, Status: o.Status, PaymentStatus: o.PaymentStatus, PaymentMethod: o.PaymentMethod,
 		CashReceived: o.CashReceived, ChangeDue: o.ChangeDue, PromotionCode: o.PromotionCode,
 		Subtotal: o.Subtotal, Discount: o.Discount, Total: o.Total, PointsEarned: o.PointsEarned,
 		Note: o.Note, Items: lines, CreatedAt: o.CreatedAt, PaidAt: o.PaidAt, UpdatedAt: o.UpdatedAt,

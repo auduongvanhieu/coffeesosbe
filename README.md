@@ -95,6 +95,10 @@ brew install sqlc && make sqlc
 | GET    | /api/v1/pos/menu                          | staff +          |
 | PATCH  | /api/v1/pos/menu/items/:id/availability   | staff + (store override) |
 | GET    | /api/v1/pos/store                         | staff +          |
+| GET    | /api/v1/pos/tables                        | staff + (floor plan) |
+| POST   | /api/v1/pos/tables                        | store manager +  |
+| PUT    | /api/v1/pos/tables/:id                    | store manager +  |
+| DELETE | /api/v1/pos/tables/:id                    | store manager +  |
 | POST   | /api/v1/pos/me/avatar                     | staff + (multipart) |
 | GET    | /api/v1/pos/customers/lookup?phone=       | staff +          |
 | POST   | /api/v1/pos/customers                     | staff +          |

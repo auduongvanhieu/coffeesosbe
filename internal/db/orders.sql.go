@@ -25,17 +25,17 @@ func (q *Queries) CountOrdersByStore(ctx context.Context, storeID uuid.UUID) (in
 
 const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (
-    brand_id, store_id, order_no, number, source, order_type, table_label, status,
+    brand_id, store_id, order_no, number, source, order_type, table_label, table_id, status,
     payment_status, payment_method, paid_at,
     customer_id, customer_name, customer_phone, promotion_code,
     subtotal, discount, total, points_earned, note, created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11,
-    $12, $13, $14, $15,
-    $16, $17, $18, $19, $20, $21
+    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    $10, $11, $12,
+    $13, $14, $15, $16,
+    $17, $18, $19, $20, $21, $22
 )
-RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at
+RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id
 `
 
 type CreateOrderParams struct {
@@ -46,6 +46,7 @@ type CreateOrderParams struct {
 	Source        string     `json:"source"`
 	OrderType     string     `json:"orderType"`
 	TableLabel    *string    `json:"tableLabel"`
+	TableID       *uuid.UUID `json:"tableId"`
 	Status        string     `json:"status"`
 	PaymentStatus string     `json:"paymentStatus"`
 	PaymentMethod *string    `json:"paymentMethod"`
@@ -71,6 +72,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		arg.Source,
 		arg.OrderType,
 		arg.TableLabel,
+		arg.TableID,
 		arg.Status,
 		arg.PaymentStatus,
 		arg.PaymentMethod,
@@ -114,6 +116,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.PaidAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TableID,
 	)
 	return i, err
 }
@@ -177,7 +180,7 @@ func (q *Queries) DeleteOrderItems(ctx context.Context, orderID uuid.UUID) error
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at FROM orders WHERE id = $1 AND store_id = $2
+SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id FROM orders WHERE id = $1 AND store_id = $2
 `
 
 type GetOrderParams struct {
@@ -215,6 +218,7 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.PaidAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TableID,
 	)
 	return i, err
 }
@@ -258,7 +262,7 @@ func (q *Queries) ListOrderItems(ctx context.Context, dollar_1 []uuid.UUID) ([]O
 }
 
 const listOrders = `-- name: ListOrders :many
-SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at FROM orders
+SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id FROM orders
 WHERE store_id = $1
   AND created_at >= $2 AND created_at < $3
   AND (cardinality($4::text[]) = 0 OR status = ANY($4::text[]))
@@ -316,6 +320,7 @@ func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order
 			&i.PaidAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TableID,
 		); err != nil {
 			return nil, err
 		}
@@ -435,7 +440,7 @@ UPDATE orders
 SET payment_status = 'paid', payment_method = $3, cash_received = $4, change_due = $5,
     paid_at = now(), status = $6, updated_at = now()
 WHERE id = $1 AND store_id = $2
-RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at
+RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id
 `
 
 type PayOrderParams struct {
@@ -484,17 +489,18 @@ func (q *Queries) PayOrder(ctx context.Context, arg PayOrderParams) (Order, erro
 		&i.PaidAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TableID,
 	)
 	return i, err
 }
 
 const replaceOrderHeader = `-- name: ReplaceOrderHeader :one
 UPDATE orders
-SET order_type = $3, table_label = $4, customer_id = $5, customer_name = $6, customer_phone = $7,
+SET order_type = $3, table_label = $4, table_id = $14, customer_id = $5, customer_name = $6, customer_phone = $7,
     promotion_code = $8, subtotal = $9, discount = $10, total = $11, points_earned = $12,
     note = $13, updated_at = now()
 WHERE id = $1 AND store_id = $2
-RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at
+RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id
 `
 
 type ReplaceOrderHeaderParams struct {
@@ -511,6 +517,7 @@ type ReplaceOrderHeaderParams struct {
 	Total         int64      `json:"total"`
 	PointsEarned  int32      `json:"pointsEarned"`
 	Note          *string    `json:"note"`
+	TableID       *uuid.UUID `json:"tableId"`
 }
 
 func (q *Queries) ReplaceOrderHeader(ctx context.Context, arg ReplaceOrderHeaderParams) (Order, error) {
@@ -528,6 +535,7 @@ func (q *Queries) ReplaceOrderHeader(ctx context.Context, arg ReplaceOrderHeader
 		arg.Total,
 		arg.PointsEarned,
 		arg.Note,
+		arg.TableID,
 	)
 	var i Order
 	err := row.Scan(
@@ -557,6 +565,7 @@ func (q *Queries) ReplaceOrderHeader(ctx context.Context, arg ReplaceOrderHeader
 		&i.PaidAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TableID,
 	)
 	return i, err
 }
@@ -564,7 +573,7 @@ func (q *Queries) ReplaceOrderHeader(ctx context.Context, arg ReplaceOrderHeader
 const setOrderStatus = `-- name: SetOrderStatus :one
 UPDATE orders SET status = $3, updated_at = now()
 WHERE id = $1 AND store_id = $2
-RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at
+RETURNING id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id
 `
 
 type SetOrderStatusParams struct {
@@ -603,6 +612,7 @@ func (q *Queries) SetOrderStatus(ctx context.Context, arg SetOrderStatusParams) 
 		&i.PaidAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TableID,
 	)
 	return i, err
 }
