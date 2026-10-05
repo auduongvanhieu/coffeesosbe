@@ -60,3 +60,23 @@ func TestBuildFloorPlanClampsClockSkew(t *testing.T) {
 		t.Errorf("minutes = %d, want 0 for a future timestamp", *plan.Tables[0].Minutes)
 	}
 }
+
+func TestTransitionsLetAPreparingOrderCloseTheTable(t *testing.T) {
+	// A cafe hands the drink over at the table, so staff must be able to free
+	// the table straight from "preparing" without stepping through "ready".
+	for _, want := range []string{StatusReady, StatusCompleted} {
+		found := false
+		for _, to := range transitions[StatusPreparing] {
+			if to == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("preparing should allow %s", want)
+		}
+	}
+	// Paid tables may start a new round; finished orders are final.
+	if len(transitions[StatusCompleted]) != 0 {
+		t.Errorf("completed should be terminal, got %v", transitions[StatusCompleted])
+	}
+}

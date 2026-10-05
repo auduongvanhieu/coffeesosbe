@@ -101,6 +101,55 @@ func (q *Queries) GetStoreTable(ctx context.Context, arg GetStoreTableParams) (S
 	return i, err
 }
 
+const getUnpaidOrderByTable = `-- name: GetUnpaidOrderByTable :one
+SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id FROM orders
+WHERE table_id = $1 AND store_id = $2 AND status = 'open'
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetUnpaidOrderByTableParams struct {
+	TableID *uuid.UUID `json:"tableId"`
+	StoreID uuid.UUID  `json:"storeId"`
+}
+
+// The order a table still owes money on, if any. Used to stop a second
+// unpaid order being opened on the same table.
+func (q *Queries) GetUnpaidOrderByTable(ctx context.Context, arg GetUnpaidOrderByTableParams) (Order, error) {
+	row := q.db.QueryRow(ctx, getUnpaidOrderByTable, arg.TableID, arg.StoreID)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.StoreID,
+		&i.OrderNo,
+		&i.Number,
+		&i.Source,
+		&i.OrderType,
+		&i.TableLabel,
+		&i.Status,
+		&i.PaymentStatus,
+		&i.PaymentMethod,
+		&i.CashReceived,
+		&i.ChangeDue,
+		&i.CustomerID,
+		&i.CustomerName,
+		&i.CustomerPhone,
+		&i.PromotionCode,
+		&i.Subtotal,
+		&i.Discount,
+		&i.Total,
+		&i.PointsEarned,
+		&i.Note,
+		&i.CreatedBy,
+		&i.PaidAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TableID,
+	)
+	return i, err
+}
+
 const listActiveTableOrders = `-- name: ListActiveTableOrders :many
 SELECT DISTINCT ON (o.table_id)
        o.table_id, o.id, o.number, o.status, o.payment_status, o.total, o.created_at,

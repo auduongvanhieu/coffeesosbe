@@ -218,6 +218,9 @@ func (s *Service) Create(ctx context.Context, brandID, storeID, userID uuid.UUID
 	if err != nil {
 		return View{}, err
 	}
+	if err := s.assertTableFree(ctx, storeID, tableID); err != nil {
+		return View{}, err
+	}
 	v, err := s.create(ctx, createArgs{
 		brandID: brandID, storeID: storeID, source: SourcePOS, status: StatusOpen,
 		orderType: in.OrderType, tableLabel: label, tableID: tableID, customer: cust, promoCode: in.PromotionCode,
@@ -248,6 +251,23 @@ func (s *Service) tableFor(ctx context.Context, storeID uuid.UUID, in CreateInpu
 		return nil, nil, err
 	}
 	return &t.ID, &t.Name, nil
+}
+
+// assertTableFree refuses a second unpaid order on the same table: a paid
+// table may start a new round (guests leave, new guests sit down), but two
+// open bills on one table would be a mistake, not a feature.
+func (s *Service) assertTableFree(ctx context.Context, storeID uuid.UUID, tableID *uuid.UUID) error {
+	if tableID == nil {
+		return nil
+	}
+	o, err := s.q.GetUnpaidOrderByTable(ctx, db.GetUnpaidOrderByTableParams{TableID: tableID, StoreID: storeID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return &StateError{Code: "table_busy", Msg: fmt.Sprintf("bàn đang có đơn %s chưa thanh toán", o.Number)}
 }
 
 // Replace handles PUT /pos/orders/:id: re-price and overwrite an open order.
@@ -402,7 +422,7 @@ func (s *Service) Pay(ctx context.Context, brandID, storeID, id uuid.UUID, in Pa
 var transitions = map[string][]string{
 	StatusOpen:      {StatusCancelled},
 	StatusPending:   {StatusPreparing, StatusRejected},
-	StatusPreparing: {StatusReady},
+	StatusPreparing: {StatusReady, StatusCompleted},
 	StatusReady:     {StatusCompleted},
 }
 

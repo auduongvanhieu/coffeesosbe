@@ -66,7 +66,10 @@ Table {
 ```
 A table is `serving` while its order is unpaid, `paid` once it is paid but the
 order is still being prepared or waiting for pickup, and `free` again when the
-order reaches `completed` / `cancelled`. `POST /pos/orders` accepts `tableId`;
+order reaches `completed` / `cancelled`. A table serves several rounds a day,
+so a `paid` table accepts a new order; a second order on a table that still
+owes money is refused with 409 `table_busy`. Staff free a table by moving its
+order to `completed`. `POST /pos/orders` accepts `tableId`;
 the table's own name overwrites `tableLabel` so tickets and the plan agree.
 Every order change broadcasts `tables.changed` on the store room.
 
@@ -119,7 +122,9 @@ validates required single-choice groups, rejects unavailable items. Errors: 422 
 
 Status machine:
 `open → preparing` (via pay) · `open → cancelled` · `pending → preparing | rejected` ·
-`preparing → ready` · `ready → completed`.
+`preparing → ready | completed` · `ready → completed`.
+A cafe hands drinks over at the table, so `preparing → completed` is allowed
+directly: that is the "trả bàn" action on the floor plan.
 
 ```
 Order {

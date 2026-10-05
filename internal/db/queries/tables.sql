@@ -35,3 +35,11 @@ WHERE id = $1 AND store_id = $2;
 
 -- name: CountStoreTables :one
 SELECT count(*) FROM store_tables WHERE store_id = $1;
+
+-- name: GetUnpaidOrderByTable :one
+-- The order a table still owes money on, if any. Used to stop a second
+-- unpaid order being opened on the same table.
+SELECT * FROM orders
+WHERE table_id = $1 AND store_id = $2 AND status = 'open'
+ORDER BY created_at DESC
+LIMIT 1;
