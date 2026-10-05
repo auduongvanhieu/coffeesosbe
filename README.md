@@ -105,6 +105,8 @@ brew install sqlc && make sqlc
 | GET    | /api/v1/pos/promotions/:code              | staff +          |
 | GET    | /api/v1/pos/orders?status=&source=&date=  | staff +          |
 | GET    | /api/v1/pos/orders/summary?date=          | staff +          |
+| GET    | /api/v1/pos/orders/history?date=&q=       | staff +          |
+| POST   | /api/v1/pos/orders/:id/adjust             | staff +          |
 | POST   | /api/v1/pos/orders                        | staff +          |
 | GET    | /api/v1/pos/orders/:id                    | staff +          |
 | PUT    | /api/v1/pos/orders/:id                    | staff +          |

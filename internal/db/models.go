@@ -87,6 +87,17 @@ type Order struct {
 	TableID       *uuid.UUID `json:"tableId"`
 }
 
+type OrderAdjustment struct {
+	ID         uuid.UUID  `json:"id"`
+	OrderID    uuid.UUID  `json:"orderId"`
+	Reason     string     `json:"reason"`
+	OldTotal   int64      `json:"oldTotal"`
+	NewTotal   int64      `json:"newTotal"`
+	Difference int64      `json:"difference"`
+	CreatedBy  *uuid.UUID `json:"createdBy"`
+	CreatedAt  time.Time  `json:"createdAt"`
+}
+
 type OrderItem struct {
 	ID          uuid.UUID  `json:"id"`
 	OrderID     uuid.UUID  `json:"orderId"`

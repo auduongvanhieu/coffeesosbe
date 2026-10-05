@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const countAdjustmentsByOrders = `-- name: CountAdjustmentsByOrders :many
+SELECT order_id, count(*)::bigint AS n
+FROM order_adjustments
+WHERE order_id = ANY($1::uuid[])
+GROUP BY order_id
+`
+
+type CountAdjustmentsByOrdersRow struct {
+	OrderID uuid.UUID `json:"orderId"`
+	N       int64     `json:"n"`
+}
+
+func (q *Queries) CountAdjustmentsByOrders(ctx context.Context, dollar_1 []uuid.UUID) ([]CountAdjustmentsByOrdersRow, error) {
+	rows, err := q.db.Query(ctx, countAdjustmentsByOrders, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountAdjustmentsByOrdersRow
+	for rows.Next() {
+		var i CountAdjustmentsByOrdersRow
+		if err := rows.Scan(&i.OrderID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countOrdersByStore = `-- name: CountOrdersByStore :one
 SELECT count(*) FROM orders WHERE store_id = $1
 `
@@ -121,6 +153,44 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 	return i, err
 }
 
+const createOrderAdjustment = `-- name: CreateOrderAdjustment :one
+INSERT INTO order_adjustments (order_id, reason, old_total, new_total, difference, created_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, order_id, reason, old_total, new_total, difference, created_by, created_at
+`
+
+type CreateOrderAdjustmentParams struct {
+	OrderID    uuid.UUID  `json:"orderId"`
+	Reason     string     `json:"reason"`
+	OldTotal   int64      `json:"oldTotal"`
+	NewTotal   int64      `json:"newTotal"`
+	Difference int64      `json:"difference"`
+	CreatedBy  *uuid.UUID `json:"createdBy"`
+}
+
+func (q *Queries) CreateOrderAdjustment(ctx context.Context, arg CreateOrderAdjustmentParams) (OrderAdjustment, error) {
+	row := q.db.QueryRow(ctx, createOrderAdjustment,
+		arg.OrderID,
+		arg.Reason,
+		arg.OldTotal,
+		arg.NewTotal,
+		arg.Difference,
+		arg.CreatedBy,
+	)
+	var i OrderAdjustment
+	err := row.Scan(
+		&i.ID,
+		&i.OrderID,
+		&i.Reason,
+		&i.OldTotal,
+		&i.NewTotal,
+		&i.Difference,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createOrderItem = `-- name: CreateOrderItem :one
 INSERT INTO order_items (order_id, item_id, name, quantity, unit_price, line_total, choices, options_text, note, sort_order)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -221,6 +291,56 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (Order, erro
 		&i.TableID,
 	)
 	return i, err
+}
+
+const listOrderAdjustments = `-- name: ListOrderAdjustments :many
+SELECT a.id, a.order_id, a.reason, a.old_total, a.new_total, a.difference, a.created_by, a.created_at, u.full_name AS by_name
+FROM order_adjustments a
+LEFT JOIN users u ON u.id = a.created_by
+WHERE a.order_id = $1
+ORDER BY a.created_at
+`
+
+type ListOrderAdjustmentsRow struct {
+	ID         uuid.UUID  `json:"id"`
+	OrderID    uuid.UUID  `json:"orderId"`
+	Reason     string     `json:"reason"`
+	OldTotal   int64      `json:"oldTotal"`
+	NewTotal   int64      `json:"newTotal"`
+	Difference int64      `json:"difference"`
+	CreatedBy  *uuid.UUID `json:"createdBy"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ByName     *string    `json:"byName"`
+}
+
+func (q *Queries) ListOrderAdjustments(ctx context.Context, orderID uuid.UUID) ([]ListOrderAdjustmentsRow, error) {
+	rows, err := q.db.Query(ctx, listOrderAdjustments, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderAdjustmentsRow
+	for rows.Next() {
+		var i ListOrderAdjustmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderID,
+			&i.Reason,
+			&i.OldTotal,
+			&i.NewTotal,
+			&i.Difference,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOrderItems = `-- name: ListOrderItems :many
@@ -568,6 +688,84 @@ func (q *Queries) ReplaceOrderHeader(ctx context.Context, arg ReplaceOrderHeader
 		&i.TableID,
 	)
 	return i, err
+}
+
+const searchOrders = `-- name: SearchOrders :many
+SELECT id, brand_id, store_id, order_no, number, source, order_type, table_label, status, payment_status, payment_method, cash_received, change_due, customer_id, customer_name, customer_phone, promotion_code, subtotal, discount, total, points_earned, note, created_by, paid_at, created_at, updated_at, table_id FROM orders
+WHERE store_id = $1
+  AND created_at >= $2 AND created_at < $3
+  AND (cardinality($4::text[]) = 0 OR status = ANY($4::text[]))
+  AND (
+    $5::text = ''
+    OR number ILIKE '%' || $5 || '%'
+    OR COALESCE(customer_phone, '') ILIKE '%' || $5 || '%'
+    OR COALESCE(customer_name, '') ILIKE '%' || $5 || '%'
+  )
+ORDER BY created_at DESC
+`
+
+type SearchOrdersParams struct {
+	StoreID     uuid.UUID `json:"storeId"`
+	CreatedAt   time.Time `json:"createdAt"`
+	CreatedAt_2 time.Time `json:"createdAt2"`
+	Column4     []string  `json:"column4"`
+	Column5     string    `json:"column5"`
+}
+
+// Same day window as ListOrders, plus a free-text match on the order number
+// or the customer's phone/name, for the bill history screen.
+func (q *Queries) SearchOrders(ctx context.Context, arg SearchOrdersParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, searchOrders,
+		arg.StoreID,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Column4,
+		arg.Column5,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.BrandID,
+			&i.StoreID,
+			&i.OrderNo,
+			&i.Number,
+			&i.Source,
+			&i.OrderType,
+			&i.TableLabel,
+			&i.Status,
+			&i.PaymentStatus,
+			&i.PaymentMethod,
+			&i.CashReceived,
+			&i.ChangeDue,
+			&i.CustomerID,
+			&i.CustomerName,
+			&i.CustomerPhone,
+			&i.PromotionCode,
+			&i.Subtotal,
+			&i.Discount,
+			&i.Total,
+			&i.PointsEarned,
+			&i.Note,
+			&i.CreatedBy,
+			&i.PaidAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TableID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setOrderStatus = `-- name: SetOrderStatus :one

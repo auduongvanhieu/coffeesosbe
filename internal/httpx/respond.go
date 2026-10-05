@@ -59,7 +59,7 @@ var fieldLabels = map[string]string{
 	"Name": "tên", "StoreID": "cửa hàng", "ItemID": "món", "Quantity": "số lượng",
 	"Method": "phương thức thanh toán", "Status": "trạng thái", "OrderType": "loại đơn",
 	"Items": "danh sách món", "CustomerName": "tên khách", "CustomerPhone": "số điện thoại khách",
-	"AvatarURL": "ảnh đại diện", "PromotionCode": "mã giảm giá",
+	"AvatarURL": "ảnh đại diện", "PromotionCode": "mã giảm giá", "Reason": "lý do sửa đơn",
 }
 
 func bindMessage(err error) string {

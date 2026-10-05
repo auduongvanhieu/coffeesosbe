@@ -461,7 +461,12 @@ func (s *Service) Get(ctx context.Context, storeID, id uuid.UUID) (View, error) 
 	if err != nil {
 		return View{}, err
 	}
-	return s.hydrate(ctx, o, nil)
+	v, err := s.hydrate(ctx, o, nil)
+	if err != nil {
+		return View{}, err
+	}
+	v.Adjustments = s.adjustments(ctx, id)
+	return v, nil
 }
 
 type ListFilter struct {
@@ -576,6 +581,12 @@ func (s *Service) hydrateMany(ctx context.Context, orders []db.Order) ([]View, e
 	for _, it := range items {
 		byOrder[it.OrderID] = append(byOrder[it.OrderID], it)
 	}
+	adjCount := map[uuid.UUID]int{}
+	if rows, err := s.q.CountAdjustmentsByOrders(ctx, ids); err == nil {
+		for _, r := range rows {
+			adjCount[r.OrderID] = int(r.N)
+		}
+	}
 	custCache := map[uuid.UUID]*db.Customer{}
 	userCache := map[uuid.UUID]*UserRef{}
 	out := make([]View, 0, len(orders))
@@ -598,7 +609,9 @@ func (s *Service) hydrateMany(ctx context.Context, orders []db.Order) ([]View, e
 				userCache[*o.CreatedBy] = by
 			}
 		}
-		out = append(out, toView(o, byOrder[o.ID], cust, by))
+		v := toView(o, byOrder[o.ID], cust, by)
+		v.AdjustmentCount = adjCount[o.ID]
+		out = append(out, v)
 	}
 	return out, nil
 }

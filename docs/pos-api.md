@@ -119,6 +119,8 @@ validates required single-choice groups, rejects unavailable items. Errors: 422 
 | GET | `/pos/orders/:id` | → `Order` |
 | PATCH | `/pos/orders/:id/status` | `{status}` → `Order` (409 `invalid_transition`) |
 | GET | `/pos/orders/summary?date=` | → `Summary` |
+| GET | `/pos/orders/history?date=&status=&q=` | → `{items: [Order]}` — the day's bills, newest first; `q` matches the order number, customer phone or name |
+| POST | `/pos/orders/:id/adjust` | `CreateOrderInput` + `reason` → `{order: Order, difference}` — correct a bill that was rung up wrong |
 
 Status machine:
 `open → preparing` (via pay) · `open → cancelled` · `pending → preparing | rejected` ·
@@ -141,7 +143,8 @@ Order {
     choices: [{group, groupName, code, name, priceDelta}], note
   }],
   createdAt, paidAt, updatedAt,
-  createdBy: {id, fullName} | null
+  createdBy: {id, fullName} | null,
+  adjustments: [{id, reason, oldTotal, newTotal, difference, byName, at}]  // single-order read only
 }
 
 Summary {
@@ -154,6 +157,14 @@ Summary {
 
 Status labels (vi): open=Đang mở, pending=Chờ xác nhận, preparing=Đang pha, ready=Sẵn sàng,
 completed=Đã giao, rejected=Đã từ chối, cancelled=Đã huỷ.
+
+### Correcting a bill
+
+`POST /pos/orders/:id/adjust` replaces the lines of an existing order, keeps
+its number and payment, and logs `{reason, oldTotal, newTotal, difference}`
+with the staff member who did it. `difference > 0` means collect more from the
+guest, `< 0` means hand money back. Loyalty points move by the same delta.
+Cancelled or rejected orders refuse the edit with 409 `order_closed`.
 
 ## Customer app (public, no auth)
 

@@ -287,6 +287,44 @@ func (h *Handler) SetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, v)
 }
 
+// Adjust serves POST /pos/orders/:id/adjust: fix a bill that was rung up
+// wrong. Answers {order, difference} so the POS can tell staff how much to
+// collect or give back.
+func (h *Handler) Adjust(c *gin.Context) {
+	brandID, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var in AdjustInput
+	if !httpx.Bind(c, &in) {
+		return
+	}
+	v, diff, err := h.svc.Adjust(c.Request.Context(), brandID, storeID, tenant.MustFrom(c).UserID, id, in)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"order": v, "difference": diff})
+}
+
+// History serves GET /pos/orders/history?date=&status=&q= for the bill list.
+func (h *Handler) History(c *gin.Context) {
+	_, storeID, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	rows, err := h.svc.History(c.Request.Context(), storeID, c.Query("date"), splitList(c.Query("status")), strings.TrimSpace(c.Query("q")))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": rows})
+}
+
 func (h *Handler) Get(c *gin.Context) {
 	_, storeID, ok := h.scope(c)
 	if !ok {

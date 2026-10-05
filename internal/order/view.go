@@ -66,6 +66,13 @@ type CreateInput struct {
 	Items         []LineInput `json:"items" binding:"required,min=1,max=100,dive"`
 }
 
+// AdjustInput corrects an order that was rung up wrong. The lines are
+// replaced wholesale, exactly like CreateInput, plus a reason for the log.
+type AdjustInput struct {
+	CreateInput
+	Reason string `json:"reason" binding:"required,min=3,max=200"`
+}
+
 type PayInput struct {
 	Method       string `json:"method" binding:"required,oneof=cash vietqr momo zalopay"`
 	CashReceived *int64 `json:"cashReceived" binding:"omitempty,min=0"`
@@ -149,6 +156,12 @@ type View struct {
 	PaidAt        *time.Time    `json:"paidAt"`
 	UpdatedAt     time.Time     `json:"updatedAt"`
 	CreatedBy     *UserRef      `json:"createdBy"`
+
+	// How many times this bill was corrected; the list screen shows a mark.
+	AdjustmentCount int `json:"adjustmentCount"`
+
+	// Filled on the single-order read; empty on list responses.
+	Adjustments []AdjustmentView `json:"adjustments,omitempty"`
 }
 
 type PromotionView struct {
@@ -157,6 +170,17 @@ type PromotionView struct {
 	Type        string `json:"type"`
 	Value       int64  `json:"value"`
 	MinSubtotal int64  `json:"minSubtotal"`
+}
+
+// AdjustmentView is one correction in an order's history.
+type AdjustmentView struct {
+	ID         uuid.UUID `json:"id"`
+	Reason     string    `json:"reason"`
+	OldTotal   int64     `json:"oldTotal"`
+	NewTotal   int64     `json:"newTotal"`
+	Difference int64     `json:"difference"` // > 0 collect more, < 0 give back
+	ByName     *string   `json:"byName"`
+	At         time.Time `json:"at"`
 }
 
 type Summary struct {

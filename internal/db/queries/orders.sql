@@ -88,3 +88,36 @@ WHERE i.id = ANY($2::uuid[]);
 
 -- name: CountOrdersByStore :one
 SELECT count(*) FROM orders WHERE store_id = $1;
+
+-- name: CreateOrderAdjustment :one
+INSERT INTO order_adjustments (order_id, reason, old_total, new_total, difference, created_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: ListOrderAdjustments :many
+SELECT a.*, u.full_name AS by_name
+FROM order_adjustments a
+LEFT JOIN users u ON u.id = a.created_by
+WHERE a.order_id = $1
+ORDER BY a.created_at;
+
+-- name: SearchOrders :many
+-- Same day window as ListOrders, plus a free-text match on the order number
+-- or the customer's phone/name, for the bill history screen.
+SELECT * FROM orders
+WHERE store_id = $1
+  AND created_at >= $2 AND created_at < $3
+  AND (cardinality($4::text[]) = 0 OR status = ANY($4::text[]))
+  AND (
+    $5::text = ''
+    OR number ILIKE '%' || $5 || '%'
+    OR COALESCE(customer_phone, '') ILIKE '%' || $5 || '%'
+    OR COALESCE(customer_name, '') ILIKE '%' || $5 || '%'
+  )
+ORDER BY created_at DESC;
+
+-- name: CountAdjustmentsByOrders :many
+SELECT order_id, count(*)::bigint AS n
+FROM order_adjustments
+WHERE order_id = ANY($1::uuid[])
+GROUP BY order_id;

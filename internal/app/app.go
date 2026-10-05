@@ -124,10 +124,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	pos.GET("/promotions/:code", orderH.Promotion)
 	pos.GET("/orders", orderH.List)
 	pos.GET("/orders/summary", orderH.Summary)
+	pos.GET("/orders/history", orderH.History)
 	pos.POST("/orders", orderH.Create)
 	pos.GET("/orders/:id", orderH.Get)
 	pos.PUT("/orders/:id", orderH.Replace)
 	pos.POST("/orders/:id/pay", orderH.Pay)
+	pos.POST("/orders/:id/adjust", orderH.Adjust)
 	pos.PATCH("/orders/:id/status", orderH.SetStatus)
 
 	// Customer app (public endpoints)
