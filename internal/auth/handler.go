@@ -12,18 +12,21 @@ import (
 
 	"coffeesos/internal/db"
 	"coffeesos/internal/httpx"
+	"coffeesos/internal/mailer"
 	"coffeesos/internal/storage"
 	"coffeesos/internal/tenant"
 )
 
 type Handler struct {
-	q       *db.Queries
-	issuer  *TokenIssuer
-	uploads *storage.Handler // nil disables avatar uploads
+	q        *db.Queries
+	issuer   *TokenIssuer
+	uploads  *storage.Handler // nil disables avatar uploads
+	mailer   *mailer.Mailer
+	adminURL string // where the reset link points, e.g. https://dev.coffeesos.online/admin
 }
 
-func NewHandler(q *db.Queries, issuer *TokenIssuer, uploads *storage.Handler) *Handler {
-	return &Handler{q: q, issuer: issuer, uploads: uploads}
+func NewHandler(q *db.Queries, issuer *TokenIssuer, uploads *storage.Handler, m *mailer.Mailer, adminURL string) *Handler {
+	return &Handler{q: q, issuer: issuer, uploads: uploads, mailer: m, adminURL: adminURL}
 }
 
 type loginRequest struct {

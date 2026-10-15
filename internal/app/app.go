@@ -21,6 +21,7 @@ import (
 	"coffeesos/internal/brand"
 	"coffeesos/internal/config"
 	"coffeesos/internal/db"
+	"coffeesos/internal/mailer"
 	"coffeesos/internal/menu"
 	"coffeesos/internal/order"
 	"coffeesos/internal/realtime"
@@ -59,7 +60,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 		log.Warn("R2 storage not configured; POST /admin/uploads will return 503 (set R2_* env vars)")
 	}
 	uploadH := storage.NewHandler(store)
-	authH := auth.NewHandler(queries, issuer, uploadH)
+	mail := mailer.New(mailer.Config{
+		Host: cfg.MailHost, Port: cfg.MailPort, Username: cfg.MailUsername,
+		Password: cfg.MailPassword, From: cfg.MailFrom,
+	}, log)
+	if !mail.Enabled() {
+		log.Warn("mail not configured; password-reset links go to the log (set MAIL_HOST / MAIL_FROM)")
+	}
+	authH := auth.NewHandler(queries, issuer, uploadH, mail, cfg.AdminURL)
 	orderH := order.NewHandler(order.NewService(pool, queries, hub), queries)
 
 	r.GET("/healthz", func(c *gin.Context) {
@@ -78,6 +86,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	v1.POST("/auth/login", authH.Login)
 	v1.POST("/auth/pin-login", authH.PinLogin)
 	v1.GET("/auth/me", auth.RequireAuth(issuer), authH.Me)
+	v1.PUT("/auth/me", auth.RequireAuth(issuer), authH.UpdateProfile)
+	v1.POST("/auth/me/avatar", auth.RequireAuth(issuer), authH.UploadMyAvatar)
+	v1.POST("/auth/change-password", auth.RequireAuth(issuer), authH.ChangePassword)
+	v1.POST("/auth/forgot-password", authH.ForgotPassword)
+	v1.POST("/auth/reset-password", authH.ResetPassword)
 
 	// Realtime
 	r.GET("/ws", auth.RequireAuth(issuer), hub.ServeWS)

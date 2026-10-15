@@ -122,7 +122,11 @@ func (c *Client) Put(ctx context.Context, brandID uuid.UUID, kind Kind, contentT
 	if !ok {
 		return Object{}, fmt.Errorf("storage: unsupported content type %q", contentType)
 	}
-	key := fmt.Sprintf("brands/%s/%s/%s.%s", brandID, kind, uuid.New(), ext)
+	scope := "brands/" + brandID.String()
+	if brandID == uuid.Nil {
+		scope = "platform" // platform admins belong to no brand
+	}
+	key := fmt.Sprintf("%s/%s/%s.%s", scope, kind, uuid.New(), ext)
 
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()

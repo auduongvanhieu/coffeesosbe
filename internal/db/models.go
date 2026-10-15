@@ -112,6 +112,15 @@ type OrderItem struct {
 	SortOrder   int32      `json:"sortOrder"`
 }
 
+type PasswordReset struct {
+	ID        uuid.UUID  `json:"id"`
+	UserID    uuid.UUID  `json:"userId"`
+	TokenHash string     `json:"tokenHash"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
 type Promotion struct {
 	ID          uuid.UUID `json:"id"`
 	BrandID     uuid.UUID `json:"brandId"`

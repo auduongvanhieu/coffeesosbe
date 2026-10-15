@@ -69,6 +69,11 @@ brew install sqlc && make sqlc
 | GET    | /healthz                                  | public           |
 | POST   | /api/v1/auth/login                        | public           |
 | POST   | /api/v1/auth/pin-login                    | public (store terminal) |
+| POST   | /api/v1/auth/forgot-password              | public           |
+| POST   | /api/v1/auth/reset-password               | public           |
+| PUT    | /api/v1/auth/me                           | any user         |
+| POST   | /api/v1/auth/me/avatar                    | any user         |
+| POST   | /api/v1/auth/change-password              | any user         |
 | GET    | /api/v1/auth/me                           | any user         |
 | GET    | /ws?token=…                               | any brand user   |
 | GET    | /api/v1/platform/brands                   | platform admin   |
@@ -144,6 +149,11 @@ make logs
 
 `scripts/deploy.sh` generates `/root/coffeesos/.env` with random
 `POSTGRES_PASSWORD`, `JWT_SECRET` and `SEED_ADMIN_PASSWORD` on first run.
+
+Password-reset emails need `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
+`MAIL_PASSWORD`, `MAIL_FROM` and `ADMIN_URL` (where the link points). Without
+them the API still works: the link is written to the request log instead of
+being sent, which is enough for development.
 Postgres and the API both listen on `127.0.0.1` of the host only
 (`API_BIND=127.0.0.1`); nginx terminates TLS and proxies:
 

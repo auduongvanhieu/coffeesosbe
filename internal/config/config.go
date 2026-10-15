@@ -32,6 +32,17 @@ type Config struct {
 	R2Bucket          string
 	R2PublicBaseURL   string // https://cdn.coffeesos.online
 
+	// Transactional email (password resets). Optional: when Host is empty the
+	// message is logged instead of sent.
+	MailHost     string
+	MailPort     string
+	MailUsername string
+	MailPassword string
+	MailFrom     string
+
+	// Public URL of the Admin SPA, used in password-reset links.
+	AdminURL string
+
 	// Used by `api seed` only.
 	SeedAdminEmail    string
 	SeedAdminPassword string
@@ -60,6 +71,12 @@ func Load() (*Config, error) {
 		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
 		R2Bucket:          os.Getenv("R2_BUCKET"),
 		R2PublicBaseURL:   strings.TrimRight(os.Getenv("R2_PUBLIC_URL"), "/"),
+		MailHost:          os.Getenv("MAIL_HOST"),
+		MailPort:          getenv("MAIL_PORT", "587"),
+		MailUsername:      os.Getenv("MAIL_USERNAME"),
+		MailPassword:      os.Getenv("MAIL_PASSWORD"),
+		MailFrom:          os.Getenv("MAIL_FROM"),
+		AdminURL:          getenv("ADMIN_URL", "https://dev.coffeesos.online/admin"),
 		SeedAdminEmail:    getenv("SEED_ADMIN_EMAIL", "admin@coffeesos.local"),
 		SeedAdminPassword: os.Getenv("SEED_ADMIN_PASSWORD"),
 		SeedDemo:          getBool("SEED_DEMO", true),

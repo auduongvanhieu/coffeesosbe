@@ -14,6 +14,11 @@ Money is integer VND. Times are RFC3339 UTC.
 | GET | `/auth/me` | → `UserView` |
 | POST | `/pos/me/avatar` | multipart `file` (JPEG/PNG/WebP/GIF ≤ 10 MB) → `UserView` with the new `avatarUrl` |
 | PUT | `/admin/users/:id/avatar` | `{avatarUrl}` (null clears; store manager+) → `{id, avatarUrl}` |
+| PUT | `/auth/me` | `{fullName, email, phone?}` → `UserView` (409 `email_taken`) |
+| POST | `/auth/me/avatar` | multipart `file` → `UserView`; works for every role, platform admins included |
+| POST | `/auth/change-password` | `{currentPassword, newPassword}` → 204 (401 `wrong_password`) |
+| POST | `/auth/forgot-password` | `{email}` → always 204; mails a one-time link valid 60 minutes |
+| POST | `/auth/reset-password` | `{token, newPassword}` → 204 (400 `invalid_token`) |
 
 ```
 LoginResponse { accessToken, tokenType: "Bearer", expiresAt, user: UserView }

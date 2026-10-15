@@ -54,3 +54,26 @@ RETURNING *;
 UPDATE users SET avatar_url = $3, updated_at = now()
 WHERE id = $1 AND brand_id = $2
 RETURNING *;
+
+-- name: UpdateUserProfile :one
+UPDATE users SET full_name = $2, email = $3, phone = $4, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1;
+
+-- name: CreatePasswordReset :one
+INSERT INTO password_resets (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: GetPasswordReset :one
+SELECT * FROM password_resets WHERE token_hash = $1;
+
+-- name: UsePasswordReset :exec
+UPDATE password_resets SET used_at = now() WHERE id = $1;
+
+-- name: InvalidateUserResets :exec
+UPDATE password_resets SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL;

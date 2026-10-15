@@ -23,6 +23,32 @@ func (q *Queries) CountUsersByRole(ctx context.Context, roleCode string) (int64,
 	return count, err
 }
 
+const createPasswordReset = `-- name: CreatePasswordReset :one
+INSERT INTO password_resets (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id, user_id, token_hash, expires_at, used_at, created_at
+`
+
+type CreatePasswordResetParams struct {
+	UserID    uuid.UUID `json:"userId"`
+	TokenHash string    `json:"tokenHash"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+func (q *Queries) CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error) {
+	row := q.db.QueryRow(ctx, createPasswordReset, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	var i PasswordReset
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (brand_id, store_id, role_code, email, phone, full_name, password_hash)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -64,6 +90,24 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.PinHash,
 		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const getPasswordReset = `-- name: GetPasswordReset :one
+SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM password_resets WHERE token_hash = $1
+`
+
+func (q *Queries) GetPasswordReset(ctx context.Context, tokenHash string) (PasswordReset, error) {
+	row := q.db.QueryRow(ctx, getPasswordReset, tokenHash)
+	var i PasswordReset
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -179,6 +223,16 @@ func (q *Queries) GetUserScope(ctx context.Context, id uuid.UUID) (GetUserScopeR
 	var i GetUserScopeRow
 	err := row.Scan(&i.BrandName, &i.BrandLogoUrl, &i.StoreName)
 	return i, err
+}
+
+const invalidateUserResets = `-- name: InvalidateUserResets :exec
+UPDATE password_resets SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL
+`
+
+func (q *Queries) InvalidateUserResets(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, invalidateUserResets, userID)
+	return err
 }
 
 const listPinUsersByStore = `-- name: ListPinUsersByStore :many
@@ -350,6 +404,20 @@ func (q *Queries) SetUserAvatarInBrand(ctx context.Context, arg SetUserAvatarInB
 	return i, err
 }
 
+const setUserPassword = `-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1
+`
+
+type SetUserPasswordParams struct {
+	ID           uuid.UUID `json:"id"`
+	PasswordHash *string   `json:"passwordHash"`
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, setUserPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
 const setUserPin = `-- name: SetUserPin :exec
 UPDATE users SET pin_hash = $3, updated_at = now()
 WHERE id = $1 AND brand_id = $2
@@ -363,5 +431,53 @@ type SetUserPinParams struct {
 
 func (q *Queries) SetUserPin(ctx context.Context, arg SetUserPinParams) error {
 	_, err := q.db.Exec(ctx, setUserPin, arg.ID, arg.BrandID, arg.PinHash)
+	return err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users SET full_name = $2, email = $3, phone = $4, updated_at = now()
+WHERE id = $1
+RETURNING id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at, pin_hash, avatar_url
+`
+
+type UpdateUserProfileParams struct {
+	ID       uuid.UUID `json:"id"`
+	FullName string    `json:"fullName"`
+	Email    *string   `json:"email"`
+	Phone    *string   `json:"phone"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.ID,
+		arg.FullName,
+		arg.Email,
+		arg.Phone,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.StoreID,
+		&i.RoleCode,
+		&i.Email,
+		&i.Phone,
+		&i.FullName,
+		&i.PasswordHash,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PinHash,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const usePasswordReset = `-- name: UsePasswordReset :exec
+UPDATE password_resets SET used_at = now() WHERE id = $1
+`
+
+func (q *Queries) UsePasswordReset(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, usePasswordReset, id)
 	return err
 }
