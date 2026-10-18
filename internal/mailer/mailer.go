@@ -5,6 +5,7 @@ package mailer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -65,10 +66,54 @@ func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
 	if m.cfg.Username != "" {
 		auth = smtp.PlainAuth("", m.cfg.Username, m.cfg.Password, m.cfg.Host)
 	}
+	// Port 465 speaks TLS from the first byte (what most Vietnamese hosts,
+	// Vietnix included, hand out); 587 and 25 start plain and upgrade with
+	// STARTTLS, which smtp.SendMail does on its own.
+	if port == "465" {
+		if err := m.sendImplicitTLS(addr, auth, to, msg); err != nil {
+			return fmt.Errorf("send mail: %w", err)
+		}
+		return nil
+	}
 	if err := smtp.SendMail(addr, auth, senderAddress(m.cfg.From), []string{to}, []byte(msg)); err != nil {
 		return fmt.Errorf("send mail: %w", err)
 	}
 	return nil
+}
+
+// sendImplicitTLS is smtp.SendMail for servers that expect TLS immediately.
+func (m *Mailer) sendImplicitTLS(addr string, auth smtp.Auth, to, msg string) error {
+	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: m.cfg.Host, MinVersion: tls.VersionTLS12})
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	c, err := smtp.NewClient(conn, m.cfg.Host)
+	if err != nil {
+		return err
+	}
+	defer c.Quit() //nolint:errcheck
+
+	if auth != nil {
+		if err := c.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(senderAddress(m.cfg.From)); err != nil {
+		return err
+	}
+	if err := c.Rcpt(to); err != nil {
+		return err
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(msg)); err != nil {
+		return err
+	}
+	return w.Close()
 }
 
 // senderAddress pulls the bare address out of "Name <a@b.c>".
