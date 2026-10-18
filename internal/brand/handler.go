@@ -284,3 +284,56 @@ func (h *Handler) Stats(c *gin.Context) {
 		Stores: row.Stores, Users: row.Users, Categories: row.Categories, Items: row.Items, AvailableItems: row.AvailableItems,
 	})
 }
+
+// DeleteUser handles DELETE /api/v1/admin/users/:id. An account that never
+// rang up an order is removed outright; one that did is deactivated instead,
+// so the orders it created keep showing who served them. Either way the email
+// is freed and the person can no longer sign in.
+func (h *Handler) DeleteUser(c *gin.Context) {
+	brandID, ok := tenant.BrandFrom(c)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httpx.Fail(c, http.StatusBadRequest, "invalid_id", "user id must be a UUID")
+		return
+	}
+	me := tenant.MustFrom(c)
+	if id == me.UserID {
+		httpx.Fail(c, http.StatusConflict, "self_delete", "không thể xoá chính tài khoản đang đăng nhập")
+		return
+	}
+	target, err := h.q.GetUserByID(c.Request.Context(), id)
+	if err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	if target.BrandID == nil || *target.BrandID != brandID {
+		httpx.Fail(c, http.StatusNotFound, "not_found", "tài khoản không thuộc thương hiệu này")
+		return
+	}
+	if int(target.RoleLevel) >= me.Level && !me.IsPlatformAdmin() {
+		httpx.Fail(c, http.StatusForbidden, "forbidden", "không thể xoá tài khoản ngang hoặc cao quyền hơn bạn")
+		return
+	}
+
+	orders, err := h.q.CountOrdersByUser(c.Request.Context(), &id)
+	if err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	if orders == 0 {
+		if err := h.q.DeleteUser(c.Request.Context(), db.DeleteUserParams{ID: id, BrandID: &brandID}); err != nil {
+			httpx.FailDB(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"id": id, "removed": true, "orders": 0})
+		return
+	}
+	if _, err := h.q.DeactivateUser(c.Request.Context(), db.DeactivateUserParams{ID: id, BrandID: &brandID}); err != nil {
+		httpx.FailDB(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": id, "removed": false, "orders": orders})
+}

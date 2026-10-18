@@ -16,8 +16,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: ListUsersByBrand :many
+-- Deactivated accounts stay in the table for order history but are hidden here.
 SELECT * FROM users
-WHERE brand_id = $1
+WHERE brand_id = $1 AND is_active
 ORDER BY created_at;
 
 -- name: CountUsersByRole :one
@@ -77,3 +78,22 @@ UPDATE password_resets SET used_at = now() WHERE id = $1;
 -- name: InvalidateUserResets :exec
 UPDATE password_resets SET used_at = now()
 WHERE user_id = $1 AND used_at IS NULL;
+
+-- name: CountOrdersByUser :one
+SELECT count(*) FROM orders WHERE created_by = $1;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1 AND brand_id = $2;
+
+-- name: DeactivateUser :one
+-- Keeps the row so past orders still show who rang them up, but frees the
+-- email so the same address can be used for a new account.
+UPDATE users
+SET is_active = false,
+    email = NULL,
+    pin_hash = NULL,
+    password_hash = NULL,
+    full_name = full_name || ' (đã nghỉ)',
+    updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING *;

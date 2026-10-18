@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countOrdersByUser = `-- name: CountOrdersByUser :one
+SELECT count(*) FROM orders WHERE created_by = $1
+`
+
+func (q *Queries) CountOrdersByUser(ctx context.Context, createdBy *uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countOrdersByUser, createdBy)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsersByRole = `-- name: CountUsersByRole :one
 SELECT count(*) FROM users WHERE role_code = $1
 `
@@ -92,6 +103,60 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AvatarUrl,
 	)
 	return i, err
+}
+
+const deactivateUser = `-- name: DeactivateUser :one
+UPDATE users
+SET is_active = false,
+    email = NULL,
+    pin_hash = NULL,
+    password_hash = NULL,
+    full_name = full_name || ' (đã nghỉ)',
+    updated_at = now()
+WHERE id = $1 AND brand_id = $2
+RETURNING id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at, pin_hash, avatar_url
+`
+
+type DeactivateUserParams struct {
+	ID      uuid.UUID  `json:"id"`
+	BrandID *uuid.UUID `json:"brandId"`
+}
+
+// Keeps the row so past orders still show who rang them up, but frees the
+// email so the same address can be used for a new account.
+func (q *Queries) DeactivateUser(ctx context.Context, arg DeactivateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, deactivateUser, arg.ID, arg.BrandID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.BrandID,
+		&i.StoreID,
+		&i.RoleCode,
+		&i.Email,
+		&i.Phone,
+		&i.FullName,
+		&i.PasswordHash,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PinHash,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1 AND brand_id = $2
+`
+
+type DeleteUserParams struct {
+	ID      uuid.UUID  `json:"id"`
+	BrandID *uuid.UUID `json:"brandId"`
+}
+
+func (q *Queries) DeleteUser(ctx context.Context, arg DeleteUserParams) error {
+	_, err := q.db.Exec(ctx, deleteUser, arg.ID, arg.BrandID)
+	return err
 }
 
 const getPasswordReset = `-- name: GetPasswordReset :one
@@ -301,10 +366,11 @@ func (q *Queries) ListPinUsersByStore(ctx context.Context, id uuid.UUID) ([]List
 
 const listUsersByBrand = `-- name: ListUsersByBrand :many
 SELECT id, brand_id, store_id, role_code, email, phone, full_name, password_hash, is_active, created_at, updated_at, pin_hash, avatar_url FROM users
-WHERE brand_id = $1
+WHERE brand_id = $1 AND is_active
 ORDER BY created_at
 `
 
+// Deactivated accounts stay in the table for order history but are hidden here.
 func (q *Queries) ListUsersByBrand(ctx context.Context, brandID *uuid.UUID) ([]User, error) {
 	rows, err := q.db.Query(ctx, listUsersByBrand, brandID)
 	if err != nil {

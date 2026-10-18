@@ -111,6 +111,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) *App {
 	admin.POST("/stores", auth.RequireLevel(tenant.LevelBrandOwner), brandH.CreateStore)
 	admin.GET("/users", auth.RequireLevel(tenant.LevelBrandOwner), brandH.ListUsers)
 	admin.POST("/users", brandH.CreateUser)
+	admin.DELETE("/users/:id", auth.RequireLevel(tenant.LevelBrandOwner), brandH.DeleteUser)
 	admin.PUT("/users/:id/pin", authH.SetPin)
 	admin.PUT("/users/:id/avatar", authH.SetAvatar)
 	admin.POST("/uploads", uploadH.Upload)

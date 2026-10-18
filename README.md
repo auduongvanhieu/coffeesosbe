@@ -87,6 +87,7 @@ brew install sqlc && make sqlc
 | POST   | /api/v1/admin/stores                      | brand owner +    |
 | GET    | /api/v1/admin/users                       | brand owner +    |
 | POST   | /api/v1/admin/users                       | store manager +  |
+| DELETE | /api/v1/admin/users/:id                   | brand owner +    |
 | PUT    | /api/v1/admin/users/:id/pin               | store manager +  |
 | PUT    | /api/v1/admin/users/:id/avatar            | store manager +  |
 | POST   | /api/v1/admin/uploads                     | store manager +  |
